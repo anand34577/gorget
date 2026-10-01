@@ -16,7 +16,7 @@ jobs:
       - run: go test -race ./...
       - run: GOOS=windows go vet ./client/... ./cmd/gorget
       - run: GOOS=darwin go vet ./client/... ./cmd/gorget
-      - run: (cd desktop && go vet ./...)
+      - run: (cd desktop && go vet -tags gtk3 ./...)
       - run: (cd terraform-provider-gorget && go vet ./...)
       - run: GOOS=windows go build ./... && GOOS=darwin go build ./client/... ./cmd/gorget
       - run: sh scripts/repro-check.sh

@@ -23,7 +23,7 @@ cli:
 # Tray app for the current OS (cgo; on Linux needs libgtk-3-dev and libwebkit2gtk-4.1-dev)
 desktop:
 	cd desktop/frontend && npm ci --no-audit --no-fund && npm run build
-	cd desktop && CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o ../bin/gorget-desktop .
+	cd desktop && CGO_ENABLED=1 go build -tags gtk3 -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o ../bin/gorget-desktop .
 
 test:
 	go vet ./...
@@ -32,7 +32,7 @@ test:
 	GOOS=darwin go vet ./client/... ./cmd/gorget
 	cd web && npx tsc -b
 	cd desktop/frontend && npx tsc -b
-	cd desktop && go vet ./...
+	cd desktop && go vet -tags gtk3 ./...
 	cd terraform-provider-gorget && go vet ./...
 
 release: web
@@ -51,14 +51,14 @@ release-cli:
 
 # Needs nfpm (https://nfpm.goreleaser.com). The desktop package needs bin/linux-ARCH/gorget-desktop built on Linux.
 packages-linux:
-	@for arch in amd64 arm64; do 		mkdir -p bin/linux-$$arch dist; 		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o bin/linux-$$arch/gorget ./cmd/gorget || exit 1; 		for t in deb rpm; do VERSION=$(patsubst v%,%,$(VERSION)) ARCH=$$arch nfpm package -f packaging/nfpm.yaml -p $$t -t dist/ || exit 1; done; 	done
+	@for arch in amd64 arm64; do 		mkdir -p bin/linux-$$arch dist; 		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o bin/linux-$$arch/gorget ./cmd/gorget || exit 1; 		for t in deb rpm; do VERSION=$(patsubst v%,%,$(VERSION)) ARCH=$$arch envsubst '$$ARCH $$VERSION' < packaging/nfpm.yaml > bin/nfpm-$$arch.yaml && nfpm package -f bin/nfpm-$$arch.yaml -p $$t -t dist/ || exit 1; done; 	done
 
 # Linux tray app packages for the current architecture (cgo: needs libgtk-3-dev and libwebkit2gtk-4.1-dev).
 packages-linux-desktop:
 	cd desktop/frontend && npm ci --no-audit --no-fund && npm run build
 	arch=$$(go env GOARCH); mkdir -p bin/linux-$$arch dist; \
-	(cd desktop && CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o ../bin/linux-$$arch/gorget-desktop .) && \
-	for t in deb rpm; do VERSION=$(patsubst v%,%,$(VERSION)) ARCH=$$arch nfpm package -f packaging/nfpm-desktop.yaml -p $$t -t dist/ || exit 1; done
+	(cd desktop && CGO_ENABLED=1 go build -tags gtk3 -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o ../bin/linux-$$arch/gorget-desktop .) && \
+	for t in deb rpm; do VERSION=$(patsubst v%,%,$(VERSION)) ARCH=$$arch envsubst '$$ARCH $$VERSION' < packaging/nfpm-desktop.yaml > bin/nfpm-$$arch.yaml && nfpm package -f bin/nfpm-$$arch.yaml -p $$t -t dist/ || exit 1; done
 
 docker:
 	docker build --build-arg VERSION=$(VERSION) -t gorget-server:$(VERSION) .
@@ -69,6 +69,7 @@ run: server
 
 # ---------- Android (needs ANDROID_HOME, ANDROID_NDK_HOME, JDK 17, gomobile) ----------
 android-aar:
+	mkdir -p android/app/libs
 	gomobile bind -target=android/arm64,android/arm,android/amd64 -androidapi 26 -javapkg io.gorget 		-trimpath -ldflags "-s -w" -o android/app/libs/gorgetcore.aar ./mobile/gorgetcore
 
 android: android-aar
