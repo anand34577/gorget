@@ -7,8 +7,7 @@ VERSION=${VERSION:-repro-check}
 A=$(mktemp -d); B=$(mktemp -d); trap 'rm -rf "$A" "$B"' EXIT
 build() {
   out=$1
-  (cd "$ROOT" && CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X github.com/anand34577/gorget/internal/core.Version=$VERSION" -o "$out/gorget-server" ./cmd/gorget-server
-   && CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X github.com/anand34577/gorget/client.Version=$VERSION" -o "$out/gorget" ./cmd/gorget)
+  (cd "$ROOT" && CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X github.com/anand34577/gorget/internal/core.Version=$VERSION" -o "$out/gorget-server" ./cmd/gorget-server \n   && CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "-s -w -buildid= -X github.com/anand34577/gorget/client.Version=$VERSION" -o "$out/gorget" ./cmd/gorget)
 }
 # Different output directories and a different build cache prove the result does not depend on them.
 build "$A"

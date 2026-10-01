@@ -67,6 +67,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: dotnet tool install --global wix --version 6.0.2
+      - run: wix extension add -g WixToolset.Util.wixext/6.0.2
       - name: Build MSI
         shell: pwsh
         run: |
