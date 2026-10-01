@@ -2,6 +2,28 @@
 
 All apps connect to your server's address (for example `vpn.example.com`) and sign in through your browser.
 
+## Linux and macOS: one command
+
+```sh
+curl -fsSL https://vpn.example.com/install.sh | sh
+```
+
+Your server serves this installer with its own address filled in. It detects the system,
+downloads the latest release from GitHub, checks it against the release checksums, installs
+it (a `.deb` or `.rpm` where it can, the macOS package on a Mac, otherwise a plain binary
+plus a system service), makes you the operator so you don't need `sudo` later, and opens
+the sign-in page.
+
+| Variation | Command |
+|---|---|
+| A server without a browser (setup key) | `curl -fsSL https://vpn.example.com/install.sh \| GORGET_SETUP_KEY=gsk_… sh` |
+| Install only, connect later | `curl -fsSL https://raw.githubusercontent.com/anand34577/gorget/main/install.sh \| sh` |
+| A specific version | `… \| GORGET_VERSION=v0.4.0 sh` |
+| Remove Gorget | `curl -fsSL https://vpn.example.com/install.sh \| sh -s -- --uninstall` |
+
+Prefer reading a script before running it? Download it first:
+`curl -fsSLo install.sh https://vpn.example.com/install.sh`, look at it, then `sh install.sh`.
+
 ## Android
 
 Install the APK from the releases page (verify its checksum and signature) or from F-Droid. On first start choose **Connect**, allow the VPN permission, and sign in. See [Gorget for Android](../ANDROID.md) for building from source.
@@ -20,11 +42,11 @@ gorget up -server vpn.example.com
 
 Open the `.pkg`. It installs the service (a launchd daemon), the command-line tool and the **Gorget** menu-bar app. macOS may ask you to allow the installer in *System Settings → Privacy & Security* because the package is not notarised yet.
 
-## Linux
+## Linux, by hand
 
 ```sh
-sudo apt install ./gorget_0.3.0_amd64.deb            # the service and CLI (nftables is a dependency)
-sudo apt install ./gorget-desktop_0.3.0_amd64.deb    # optional tray app (GTK, WebKitGTK)
+sudo apt install ./gorget_0.4.0_amd64.deb            # the service and CLI (nftables is a dependency)
+sudo apt install ./gorget-desktop_0.4.0_amd64.deb    # optional tray app (GTK, WebKitGTK)
 gorget up -server vpn.example.com
 ```
 

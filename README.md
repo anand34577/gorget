@@ -27,7 +27,12 @@ docker compose up -d
 docker compose logs gorget     # prints a setup link with the token in it
 ```
 
-Open the setup link and create the owner account. Open these ports: TCP 80 + 443, UDP 443 (HTTP/3), UDP 3478 (STUN), UDP 3479 (UDP relay), UDP 51820 (WireGuard gateway).
+Open the setup link and create the owner account. Then, on any Linux or Mac device:
+
+```sh
+curl -fsSL https://vpn.example.com/install.sh | sh
+```
+ Open these ports: TCP 80 + 443, UDP 443 (HTTP/3), UDP 3478 (STUN), UDP 3479 (UDP relay), UDP 51820 (WireGuard gateway).
 
 Other layouts: [`docker-compose.postgres.yml`](deploy/docker/docker-compose.postgres.yml), behind [Caddy](deploy/docker/docker-compose.caddy.yml) or [Nginx](deploy/proxy/nginx.conf).
 

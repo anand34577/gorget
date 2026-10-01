@@ -3,7 +3,7 @@ LDFLAGS := -s -w -buildid= -X github.com/anand34577/gorget/internal/core.Version
 CLDFLAGS := -s -w -buildid= -X github.com/anand34577/gorget/client.Version=$(VERSION)
 PLATFORMS := linux/amd64 linux/arm64 linux/arm windows/amd64 windows/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: repro bench docs-site all web server cli desktop proto test lint release release-cli packages-linux docker run clean android-aar android android-release
+.PHONY: repro bench docs-site all web server cli desktop proto test lint release release-cli packages-linux packages-linux-desktop docker run clean android-aar android android-release
 
 all: web server
 
@@ -52,6 +52,13 @@ release-cli:
 # Needs nfpm (https://nfpm.goreleaser.com). The desktop package needs bin/linux-ARCH/gorget-desktop built on Linux.
 packages-linux:
 	@for arch in amd64 arm64; do 		mkdir -p bin/linux-$$arch dist; 		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o bin/linux-$$arch/gorget ./cmd/gorget || exit 1; 		for t in deb rpm; do VERSION=$(patsubst v%,%,$(VERSION)) ARCH=$$arch nfpm package -f packaging/nfpm.yaml -p $$t -t dist/ || exit 1; done; 	done
+
+# Linux tray app packages for the current architecture (cgo: needs libgtk-3-dev and libwebkit2gtk-4.1-dev).
+packages-linux-desktop:
+	cd desktop/frontend && npm ci --no-audit --no-fund && npm run build
+	arch=$$(go env GOARCH); mkdir -p bin/linux-$$arch dist; \
+	(cd desktop && CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags "$(CLDFLAGS)" -o ../bin/linux-$$arch/gorget-desktop .) && \
+	for t in deb rpm; do VERSION=$(patsubst v%,%,$(VERSION)) ARCH=$$arch nfpm package -f packaging/nfpm-desktop.yaml -p $$t -t dist/ || exit 1; done
 
 docker:
 	docker build --build-arg VERSION=$(VERSION) -t gorget-server:$(VERSION) .

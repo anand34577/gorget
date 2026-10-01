@@ -1,8 +1,13 @@
 name: release
 # Push a tag like v0.4.0 and everything below builds and lands on the GitHub release.
+# "Run workflow" on the Actions tab does a dry run: builds everything, publishes nothing.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+env:
+  # The tag, or a placeholder version for dry runs.
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.0.0' }}
 permissions:
   contents: write
   packages: write
@@ -17,17 +22,37 @@ jobs:
         with: { go-version-file: go.mod }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: make release release-cli VERSION=${{ github.ref_name }}
+      - run: make release release-cli VERSION=${{ env.VERSION }}
       - name: Linux packages
         run: |
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-          make packages-linux VERSION=${{ github.ref_name }}
+          make packages-linux VERSION=${{ env.VERSION }}
       - name: SBOM
         run: |
           go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
           cyclonedx-gomod mod -json -output dist/gorget-sbom.cdx.json
       - uses: actions/upload-artifact@v4
         with: { name: dist-linux, path: dist/*, if-no-files-found: error }
+      - name: One-line installers (also attached to the release)
+        run: mkdir -p inst && cp install.sh install.ps1 install-server.sh inst/
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-installers, path: inst/*, if-no-files-found: error }
+
+  linux-desktop:
+    name: Linux tray app .deb/.rpm
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - run: make packages-linux-desktop VERSION=${{ env.VERSION }}
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-linux-desktop, path: dist/gorget-desktop*, if-no-files-found: error }
 
   # The installers need a native toolchain (cgo for the tray app). They must not block the
   # server/CLI release if the platform packaging breaks, so a failure here only skips that file.
@@ -45,7 +70,7 @@ jobs:
       - name: Build MSI
         shell: pwsh
         run: |
-          $v = '${{ github.ref_name }}'.TrimStart('v')
+          $v = '${{ env.VERSION }}'.TrimStart('v')
           ./packaging/windows/build-msi.ps1 -Version $v
       - uses: actions/upload-artifact@v4
         with: { name: dist-windows, path: dist/*.msi, if-no-files-found: error }
@@ -60,7 +85,7 @@ jobs:
         with: { go-version-file: go.mod }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: ./packaging/macos/build-pkg.sh "${GITHUB_REF_NAME#v}"
+      - run: ./packaging/macos/build-pkg.sh "${VERSION#v}"
       - uses: actions/upload-artifact@v4
         with: { name: dist-macos, path: dist/*.pkg, if-no-files-found: error }
 
@@ -108,7 +133,7 @@ jobs:
       - name: Collect
         run: |
           mkdir -p dist
-          v="${GITHUB_REF_NAME#v}"
+          v="${VERSION#v}"
           for f in android/app/build/outputs/apk/release/*.apk; do
             abi=$(basename "$f" .apk | sed -e 's/^app-//' -e 's/-release$//')
             cp "$f" "dist/gorget-android-$v-$abi.apk"
@@ -143,16 +168,16 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
           platforms: linux/amd64,linux/arm64
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: VERSION=${{ env.VERSION }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
   publish:
     name: checksums, signatures, release
-    needs: [linux, windows, macos, android]
-    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    needs: [linux, linux-desktop, windows, macos, android]
+    if: ${{ !cancelled() && needs.linux.result == 'success' && startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

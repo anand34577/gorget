@@ -309,12 +309,24 @@ function AddDeviceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
   const { me } = useSession();
   const navigate = useNavigate();
   const server = me.public_url;
+  const oneLiner = `curl -fsSL ${server}/install.sh | sh`;
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title="Add a device" wide>
+      <div className="mb-4 rounded-lg border border-blued/25 bg-blued-soft p-4">
+        <h3 className="text-[13px] font-semibold">Linux or Mac: one command</h3>
+        <p className="mt-1 text-xs text-ink-2">Run this in a terminal. It installs Gorget, starts the service and opens the sign-in page. Downloads are checked against the release checksums.</p>
+        <div className="mt-2 flex items-center gap-1 rounded border border-line bg-surface px-2 py-1.5">
+          <Mono className="flex-1 overflow-x-auto whitespace-nowrap text-[12px]">{oneLiner}</Mono>
+          <CopyButton value={oneLiner} />
+        </div>
+        <p className="mt-2 text-[11px] text-ink-3">
+          For a server, add a setup key: <span className="font-mono">curl -fsSL {server}/install.sh | GORGET_SETUP_KEY=gsk_… sh</span>
+        </p>
+      </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border border-line p-4">
-          <h3 className="text-[13px] font-semibold">Computer or phone</h3>
-          <p className="mt-1 text-xs text-ink-3">Install the Gorget app, enter this server's address and sign in with your account.</p>
+          <h3 className="text-[13px] font-semibold">Windows, Android or the tray app</h3>
+          <p className="mt-1 text-xs text-ink-3">Install the Gorget app from the releases page, enter this server's address and sign in with your account.</p>
           <div className="mt-3 space-y-1.5">
             <div className="text-[11px] uppercase tracking-wider text-ink-3">Server address</div>
             <div className="flex items-center gap-1 rounded border border-line bg-sunken px-2 py-1">

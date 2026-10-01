@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
     paths: ['docs/**', 'mkdocs.yml']
+  workflow_dispatch:
 permissions:
   contents: read
   pages: write
@@ -18,8 +19,12 @@ jobs:
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist/site }
+  # Publishing needs GitHub Pages (Settings > Pages > Source: GitHub Actions; private
+  # repositories need a paid plan). Turn it on, then add the repository variable
+  # PAGES_ENABLED=true (Settings > Secrets and variables > Actions > Variables).
   deploy:
     needs: build
+    if: vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: { name: github-pages, url: '${{ steps.deployment.outputs.page_url }}' }
     steps:

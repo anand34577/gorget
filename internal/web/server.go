@@ -21,6 +21,7 @@ import (
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/quic-go/quic-go/http3"
 
+	"github.com/anand34577/gorget"
 	"github.com/anand34577/gorget/internal/config"
 	"github.com/anand34577/gorget/internal/web/ui"
 )
@@ -150,6 +151,19 @@ func (s *Server) Handler(rt Routes) http.Handler {
 	if rt.Relay != nil {
 		mux.Handle("/relay", rt.Relay)
 	}
+	// One-line client installer for Linux and macOS, with this server's address filled in:
+	//   curl -fsSL https://vpn.example.com/install.sh | sh
+	// Public on purpose (devices fetch it before they are on the network).
+	// Windows: irm https://vpn.example.com/install.ps1 | iex
+	serveScript := func(ctype, body string) http.Handler {
+		return compress(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", ctype)
+			w.Header().Set("Cache-Control", "no-cache")
+			_, _ = w.Write([]byte(body))
+		}))
+	}
+	mux.Handle("GET /install.sh", serveScript("text/x-shellscript; charset=utf-8", gorget.InstallScript(s.cfg.PublicURL)))
+	mux.Handle("GET /install.ps1", serveScript("text/plain; charset=utf-8", gorget.InstallPowerShell(s.cfg.PublicURL)))
 	mux.Handle("/", s.admin(compress(s.spa())))
 	return s.base(mux)
 }

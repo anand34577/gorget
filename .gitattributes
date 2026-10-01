@@ -1,0 +1,8 @@
+# Scripts run on Linux and macOS (and install.sh is served by the server), so they must
+# keep Unix line endings on every checkout, including Windows.
+*.sh                 text eol=lf
+android/gradlew      text eol=lf
+packaging/macos/scripts/* text eol=lf
+packaging/aur/PKGBUILD    text eol=lf
+*.ps1                text eol=crlf
+*.bat                text eol=crlf

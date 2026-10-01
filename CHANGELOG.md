@@ -20,6 +20,10 @@
 - **Routers with plain WireGuard can share networks:** add LAN and VLAN ranges to a
   WireGuard configuration (Routes & exit nodes > Add networks behind a router). WireGuard
   configurations can be downloaded as an **OpenWrt setup script**.
+- **One-line install on Linux and macOS:** `curl -fsSL https://vpn.example.com/install.sh | sh`.
+  The server serves the installer with its own address filled in; downloads are checked
+  against the release checksums. Works with a setup key for headless servers, and
+  `--uninstall` removes Gorget again.
 - Guide: [your home network, from anywhere](docs/guide/homelab.md).
 
 ### Fixed

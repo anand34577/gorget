@@ -39,12 +39,10 @@ or your OpenWrt router (see option B).
 
 ### Option A: a Linux machine (recommended)
 
-Download the `.deb` (Debian, Ubuntu, Proxmox) or `.rpm` from the
-[latest release](https://github.com/anand34577/gorget/releases/latest), then:
+Create a setup key first (**Setup keys > New**, tag `tag:home-router`), then on the machine:
 
 ```sh
-sudo apt install ./gorget_*_amd64.deb
-sudo gorget up -server vpn.example.com -setup-key -     # paste a setup key, or leave out -setup-key to sign in in a browser
+curl -fsSL https://vpn.example.com/install.sh | GORGET_SETUP_KEY=gsk_… sh
 sudo gorget set -advertise-routes 192.168.1.0/24,192.168.20.0/24,192.168.30.0/24
 ```
 
@@ -55,8 +53,8 @@ come back through the same machine automatically.
 The machine must be able to reach every VLAN you list (it needs an address or a route in
 each one, which is normal when the router routes between your VLANs).
 
-For a server, use a setup key with the tag `tag:home-router` (**Setup keys > New**) so the
-device belongs to the network rather than to a person, and its sign-in doesn't expire.
+The tag makes the device belong to the network rather than to a person, and its sign-in
+doesn't expire.
 
 ### Option B: your OpenWrt router
 
@@ -78,8 +76,8 @@ make direct connections.
 ## 3. Laptops and phones
 
 - **Windows:** install the MSI, open the Gorget tray app, enter `vpn.example.com`, sign in.
-- **Linux:** install the `.deb`/`.rpm`, then `sudo gorget up -server vpn.example.com`.
-  The tray app is optional.
+- **Linux and Mac:** `curl -fsSL https://vpn.example.com/install.sh | sh` installs Gorget
+  and opens the sign-in page.
 - **Android:** install the APK, enter the server address and sign in. Turn on *Always-on
   VPN* in Android's settings if you want it connected all the time.
 
