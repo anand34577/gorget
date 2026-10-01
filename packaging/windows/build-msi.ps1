@@ -39,6 +39,6 @@ if (-not (Test-Path "$bin\wintun.dll")) {
 }
 
 $msi = Join-Path $dist "gorget_${Version}_windows_$Arch.msi"
-wix build "$PSScriptRoot\gorget.wxs" -arch $(if ($Arch -eq 'arm64') { 'arm64' } else { 'x64' }) `
+wix build -ext WixToolset.Util.wixext "$PSScriptRoot\gorget.wxs" -arch $(if ($Arch -eq 'arm64') { 'arm64' } else { 'x64' }) `
     -d Version=$Version -d "BinDir=$bin" -d "Root=$root" -o $msi
 Write-Host "built $msi"
