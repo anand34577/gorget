@@ -1,0 +1,170 @@
+name: release
+# Push a tag like v0.4.0 and everything below builds and lands on the GitHub release.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  packages: write
+  id-token: write   # keyless cosign signing
+jobs:
+  linux:
+    name: server, CLI, .deb/.rpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: make release release-cli VERSION=${{ github.ref_name }}
+      - name: Linux packages
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          make packages-linux VERSION=${{ github.ref_name }}
+      - name: SBOM
+        run: |
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+          cyclonedx-gomod mod -json -output dist/gorget-sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-linux, path: dist/*, if-no-files-found: error }
+
+  # The installers need a native toolchain (cgo for the tray app). They must not block the
+  # server/CLI release if the platform packaging breaks, so a failure here only skips that file.
+  windows:
+    name: Windows MSI
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: dotnet tool install --global wix
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}'.TrimStart('v')
+          ./packaging/windows/build-msi.ps1 -Version $v
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-windows, path: dist/*.msi, if-no-files-found: error }
+
+  macos:
+    name: macOS pkg
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: ./packaging/macos/build-pkg.sh "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-macos, path: dist/*.pkg, if-no-files-found: error }
+
+  android:
+    name: Android APK (signed)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Check the signing secrets
+        if: env.HAS_KEY != 'true'
+        run: |
+          echo "::error::Add ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD under Settings > Secrets and variables > Actions."
+          exit 1
+      - name: Go core for Android (gomobile)
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          gomobile init
+          make android-aar
+      - name: Signing key (only on the runner, removed afterwards)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/keystore.properties
+      - name: Build release APKs
+        run: cd android && ./gradlew --no-daemon assembleRelease
+      - name: Collect
+        run: |
+          mkdir -p dist
+          v="${GITHUB_REF_NAME#v}"
+          for f in android/app/build/outputs/apk/release/*.apk; do
+            abi=$(basename "$f" .apk | sed -e 's/^app-//' -e 's/-release$//')
+            cp "$f" "dist/gorget-android-$v-$abi.apk"
+          done
+          ls -l dist
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" android/keystore.properties
+      - uses: actions/upload-artifact@v4
+        with: { name: dist-android, path: dist/*.apk, if-no-files-found: error }
+
+  docker:
+    name: container image (ghcr.io)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  publish:
+    name: checksums, signatures, release
+    needs: [linux, windows, macos, android]
+    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: sigstore/cosign-installer@v3
+      - name: Checksums and signatures
+        run: |
+          cd dist
+          rm -f SHA256SUMS   # the per-job file only covers the server binaries
+          sha256sum * > SHA256SUMS
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

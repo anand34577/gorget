@@ -1,0 +1,37 @@
+# Metadata for the F-Droid build server (submit to https://gitlab.com/fdroid/fdroiddata as metadata/io.gorget.android.yml).
+Categories:
+  - Internet
+  - Security
+License: AGPL-3.0-only
+AuthorName: Gorget contributors
+WebSite: https://github.com/anand34577/gorget
+SourceCode: https://github.com/anand34577/gorget
+IssueTracker: https://github.com/anand34577/gorget/issues
+Changelog: https://github.com/anand34577/gorget/releases
+
+AutoName: Gorget
+
+RepoType: git
+Repo: https://github.com/anand34577/gorget.git
+
+Builds:
+  - versionName: 0.4.0
+    versionCode: 4
+    commit: v0.4.0
+    subdir: android/app
+    sudo:
+      - apt-get update
+      - apt-get install -y golang-go
+    init: go install golang.org/x/mobile/cmd/gomobile@latest && go install golang.org/x/mobile/cmd/gobind@latest
+    gradle:
+      - yes
+    prebuild:
+      - export PATH=$PATH:$HOME/go/bin
+      - cd ../.. && gomobile init
+      - cd ../.. && gomobile bind -target=android/arm64,android/arm,android/amd64 -androidapi 26 -javapkg io.gorget -trimpath -ldflags "-s -w" -o android/app/libs/gorgetcore.aar ./mobile/gorgetcore
+    ndk: r28b
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.4.0
+CurrentVersionCode: 4

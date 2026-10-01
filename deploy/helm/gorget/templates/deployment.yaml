@@ -1,0 +1,161 @@
+{{- if and (eq .Values.database.driver "sqlite") (gt (int .Values.replicaCount) 1) }}
+{{- fail "several replicas need PostgreSQL: set database.driver=postgres (SQLite supports a single replica)" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gorget.fullname" . }}
+  labels: {{- include "gorget.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- if eq .Values.database.driver "sqlite" }}
+  strategy:
+    type: Recreate # the SQLite volume can only be mounted by one pod
+  {{- end }}
+  selector:
+    matchLabels: {{- include "gorget.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "gorget.selector" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: {{ not .Values.gateway.enabled }}
+        fsGroup: 65532
+      containers:
+        - name: gorget
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve"]
+          env:
+            - name: GORGET_PUBLIC_URL
+              value: {{ required "set publicUrl" .Values.publicUrl | quote }}
+            - name: GORGET_DATA_DIR
+              value: /var/lib/gorget
+            - name: GORGET_TLS_MODE
+              value: {{ .Values.tls.mode | quote }}
+            {{- if .Values.tls.email }}
+            - name: GORGET_TLS_EMAIL
+              value: {{ .Values.tls.email | quote }}
+            {{- end }}
+            {{- if eq .Values.tls.mode "off" }}
+            - name: GORGET_HTTP_LISTEN
+              value: ":8080"
+            - name: GORGET_HTTP_REDIRECT_LISTEN
+              value: ""
+            - name: GORGET_HTTP3
+              value: "false"
+            {{- end }}
+            - name: GORGET_DB_DRIVER
+              value: {{ .Values.database.driver | quote }}
+            {{- if eq .Values.database.driver "postgres" }}
+            - name: GORGET_DB_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gorget.dsnSecret" . }}
+                  key: dsn
+            {{- end }}
+            - name: GORGET_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gorget.masterSecret" . }}
+                  key: master-key
+            - name: GORGET_CLUSTER_ENABLED
+              value: {{ include "gorget.clustered" . | quote }}
+            - name: GORGET_CLUSTER_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: GORGET_CLUSTER_PEER_ADDR
+              value: "$(POD_IP):3480"
+            - name: GORGET_RELAY_REGION
+              value: {{ .Values.relay.region | quote }}
+            - name: GORGET_RELAY_UDP_LISTEN
+              value: {{ if .Values.relay.udp.enabled }}{{ printf ":%d" (int .Values.relay.udp.port) | quote }}{{ else }}""{{ end }}
+            {{- if .Values.relay.udp.advertise }}
+            - name: GORGET_RELAY_UDP_ADVERTISE
+              value: {{ .Values.relay.udp.advertise | quote }}
+            {{- end }}
+            - name: GORGET_STUN_ENABLED
+              value: {{ .Values.stun.enabled | quote }}
+            {{- if .Values.stun.advertise }}
+            - name: GORGET_STUN_ADVERTISE
+              value: {{ .Values.stun.advertise | quote }}
+            {{- end }}
+            - name: GORGET_GATEWAY_ENABLED
+              value: {{ .Values.gateway.enabled | quote }}
+            {{- if .Values.gateway.endpoint }}
+            - name: GORGET_GATEWAY_ENDPOINT
+              value: {{ .Values.gateway.endpoint | quote }}
+            {{- end }}
+            {{- if .Values.metrics.enabled }}
+            - name: GORGET_METRICS_ENABLED
+              value: "true"
+            - name: GORGET_METRICS_LISTEN
+              value: ":9090"
+            - name: GORGET_METRICS_TOKEN
+              value: {{ required "set metrics.token when metrics are enabled" .Values.metrics.token | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - {name: http, containerPort: {{ if eq .Values.tls.mode "off" }}8080{{ else }}443{{ end }}, protocol: TCP}
+            - {name: peer-link, containerPort: 3480, protocol: UDP}
+            {{- if .Values.stun.enabled }}
+            - {name: stun, containerPort: 3478, protocol: UDP}
+            {{- end }}
+            {{- if .Values.relay.udp.enabled }}
+            - {name: relay-udp, containerPort: {{ .Values.relay.udp.port }}, protocol: UDP}
+            {{- end }}
+            {{- if .Values.gateway.enabled }}
+            - {name: wireguard, containerPort: {{ .Values.gateway.port }}, protocol: UDP}
+            {{- end }}
+            {{- if .Values.metrics.enabled }}
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http, scheme: {{ include "gorget.scheme" . }}}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http, scheme: {{ include "gorget.scheme" . }}}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            {{- if .Values.gateway.enabled }}
+            capabilities: {add: [NET_ADMIN]}
+            {{- else }}
+            capabilities: {drop: [ALL]}
+            {{- end }}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/gorget}
+            - {name: tmp, mountPath: /tmp}
+          {{- with .Values.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          {{- if and .Values.persistence.enabled (eq .Values.database.driver "sqlite") }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "gorget.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - {name: tmp, emptyDir: {}}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

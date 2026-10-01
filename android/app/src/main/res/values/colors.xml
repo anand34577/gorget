@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="steel_bg">#EDF0F3</color>
+    <color name="steel_dark">#0F1318</color>
+    <color name="blued">#3A55B4</color>
+    <color name="verdigris">#2E8C7E</color>
+    <color name="straw">#A87F22</color>
+    <color name="widget_bg">#F0151A21</color>
+</resources>

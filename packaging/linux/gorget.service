@@ -1,0 +1,25 @@
+[Unit]
+Description=Gorget VPN client
+Documentation=https://github.com/anand34577/gorget
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/gorget daemon
+Restart=on-failure
+RestartSec=3
+# Creates and removes network interfaces, routes and firewall rules, so it needs root.
+StateDirectory=gorget
+StateDirectoryMode=0700
+RuntimeDirectory=gorget
+RuntimeDirectoryMode=0755
+DeviceAllow=/dev/net/tun rw
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelModules=true
+# No ProtectControlGroups: per-app routing (gorget run -bypass) creates a cgroup.
+LockPersonality=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

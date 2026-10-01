@@ -1,0 +1,67 @@
+site_name: Gorget
+site_description: Self-hosted WireGuard mesh VPN. You run the server; nothing ever leaves it.
+repo_url: https://github.com/anand34577/gorget
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: dist/site
+strict: false
+
+theme:
+  name: material
+  features: [navigation.sections, navigation.top, content.code.copy, search.highlight]
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle: {icon: material/weather-night, name: Dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle: {icon: material/weather-sunny, name: Light mode}
+  # No external fonts, analytics or CDNs: the built site is fully self-contained.
+  font: false
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install the server: guide/install-server.md
+      - Install the apps: guide/install-clients.md
+      - First steps: guide/first-steps.md
+      - "Your home network, from anywhere": guide/homelab.md
+  - Using Gorget:
+      - Access rules: guide/access-rules.md
+      - DNS: guide/dns.md
+      - Exit nodes and routes: guide/routes.md
+      - Temporary access: guide/temporary-access.md
+      - Domain routing: guide/domain-routing.md
+      - Device health: guide/posture.md
+      - Insights and connection history: guide/insights.md
+      - Email notifications: guide/email.md
+      - Files and SSH: guide/files-and-ssh.md
+      - Post-quantum protection: guide/post-quantum.md
+  - Running a server:
+      - HTTPS certificates: ops/tls.md
+      - Single sign-on and SCIM: ops/sso.md
+      - High availability (cluster): CLUSTER.md
+      - Kubernetes (Helm): ops/kubernetes.md
+      - Backups and upgrades: ops/backups.md
+      - Monitoring: ops/monitoring.md
+      - Troubleshooting: ops/troubleshooting.md
+  - Automation:
+      - REST API: ops/api.md
+      - Terraform: ops/terraform.md
+  - Security:
+      - Security model: SECURITY.md
+      - Reproducible builds: ops/reproducible-builds.md
+  - Project:
+      - Benchmarks: BENCHMARKS.md
+      - Android: ANDROID.md
+      - Requirements: REQUIREMENTS.md
+      - Roadmap: ROADMAP.md
+      - Status: STATUS.md

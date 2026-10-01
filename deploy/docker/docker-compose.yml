@@ -1,0 +1,39 @@
+# Simplest setup: SQLite + built-in web server with automatic Let's Encrypt certificates.
+#  1. Point a DNS name (e.g. vpn.example.com) at this server.
+#  2. Open TCP 80 and 443, UDP 443 (HTTP/3), UDP 3478 (STUN), UDP 3479 (UDP relay) and UDP 51820 (WireGuard).
+#  3. docker compose up -d
+#  4. docker compose logs gorget | grep setup_token   → open https://vpn.example.com/setup
+services:
+  gorget:
+    image: ghcr.io/anand34577/gorget:latest
+    build: ../..
+    container_name: gorget
+    restart: unless-stopped
+    environment:
+      GORGET_PUBLIC_URL: https://vpn.example.com
+      GORGET_TLS_EMAIL: admin@example.com
+      # GORGET_TLS_STAGING: "true"   # use while testing to avoid Let's Encrypt rate limits
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+      - "443:443/udp"
+      - "3478:3478/udp"
+      - "3479:3479/udp"
+      - "51820:51820/udp"
+    volumes:
+      - gorget-data:/var/lib/gorget
+    cap_add:
+      - NET_ADMIN # WireGuard interface, routes and nftables
+    devices:
+      - /dev/net/tun # userspace WireGuard fallback
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv6.conf.all.forwarding: "1"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  gorget-data:

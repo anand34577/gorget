@@ -1,0 +1,165 @@
+@import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Tempered-steel tokens. Semantic names map to the palette:
+   blued steel (primary), verdigris (healthy), temper straw (attention), oxide (danger). */
+:root {
+  --bg: #edf0f3;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --sunken: #e3e8ed;
+  --line: #d5dce3;
+  --line-strong: #b8c2cc;
+  --ink: #141a22;
+  --ink-2: #4a5663;
+  --ink-3: #7a8693;
+  --blued: #3a55b4;
+  --blued-ink: #ffffff;
+  --blued-soft: #e3e8f8;
+  --verdigris: #2e8c7e;
+  --verdigris-soft: #dcefeb;
+  --straw: #a87f22;
+  --straw-soft: #f5ecd6;
+  --oxide: #b5473a;
+  --oxide-soft: #f6e1de;
+  --temper: linear-gradient(90deg, #3a55b4 0%, #7b4fa8 52%, #c49a3a 100%);
+  --shadow: 0 1px 2px rgb(20 26 34 / 0.06), 0 4px 16px -6px rgb(20 26 34 / 0.12);
+  /* Chart series (validated for colour-blind separation on these surfaces). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --grid: #e6eaee;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1318;
+  --surface: #161b22;
+  --surface-2: #1b212a;
+  --sunken: #0b0e12;
+  --line: #262e39;
+  --line-strong: #364150;
+  --ink: #e6ebf0;
+  --ink-2: #a3aeba;
+  --ink-3: #6f7b88;
+  --blued: #6f87e0;
+  --blued-ink: #0c1020;
+  --blued-soft: #1f2846;
+  --verdigris: #4fb7a6;
+  --verdigris-soft: #15302c;
+  --straw: #d9b45a;
+  --straw-soft: #33291a;
+  --oxide: #e0705f;
+  --oxide-soft: #3a1d19;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -10px rgb(0 0 0 / 0.6);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --grid: #222a34;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-blued: var(--blued);
+  --color-blued-ink: var(--blued-ink);
+  --color-blued-soft: var(--blued-soft);
+  --color-verdigris: var(--verdigris);
+  --color-verdigris-soft: var(--verdigris-soft);
+  --color-straw: var(--straw);
+  --color-straw-soft: var(--straw-soft);
+  --color-oxide: var(--oxide);
+  --color-oxide-soft: var(--oxide-soft);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-grid: var(--grid);
+  --font-display: "Bricolage Grotesque Variable", "IBM Plex Sans", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+  --shadow-panel: var(--shadow);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--blued) 30%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--blued);
+  outline-offset: 2px;
+}
+
+.temper-line {
+  background: var(--temper);
+}
+
+.font-display {
+  font-variation-settings: "wdth" 85;
+  letter-spacing: -0.02em;
+}
+
+/* Scrollbars in keeping with the steel surfaces */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* React Flow theming */
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__controls-button {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+  fill: var(--ink-2) !important;
+}
+
+/* CodeMirror */
+.cm-editor {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--surface) !important;
+}
+.cm-gutters {
+  background: var(--surface-2) !important;
+  border-right: 1px solid var(--line) !important;
+  color: var(--ink-3) !important;
+}
+.cm-focused {
+  outline: none !important;
+}

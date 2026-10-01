@@ -1,0 +1,32 @@
+# Maintainer: Gorget contributors <noreply@gorget.invalid>
+pkgname=gorget
+pkgver=0.3.0
+pkgrel=1
+pkgdesc='Self-hosted WireGuard mesh VPN client (service, CLI and tray app)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/anand34577/gorget'
+license=('AGPL-3.0-only')
+depends=('nftables' 'gtk3' 'webkit2gtk-4.1')
+makedepends=('go' 'nodejs' 'npm' 'git')
+optdepends=('systemd-resolvconf: device names via split DNS')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP') # replace with the real checksum when tagging a release
+
+build() {
+  cd "$pkgname-$pkgver"
+  export CGO_ENABLED=0 GOFLAGS='-trimpath -mod=readonly'
+  go build -ldflags "-s -w -X github.com/anand34577/gorget/client.Version=$pkgver" -o gorget ./cmd/gorget
+  (cd desktop/frontend && npm ci --no-audit --no-fund && npm run build)
+  (cd desktop && CGO_ENABLED=1 go build -ldflags "-s -w" -o ../gorget-desktop .)
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 gorget "$pkgdir/usr/bin/gorget"
+  install -Dm755 gorget-desktop "$pkgdir/usr/bin/gorget-desktop"
+  install -Dm644 packaging/linux/gorget.service "$pkgdir/usr/lib/systemd/system/gorget.service"
+  install -Dm644 packaging/linux/gorget-desktop.desktop "$pkgdir/usr/share/applications/gorget.desktop"
+  install -Dm644 packaging/linux/gorget-autostart.desktop "$pkgdir/etc/xdg/autostart/gorget.desktop"
+  install -Dm644 desktop/icons/app.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/gorget.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

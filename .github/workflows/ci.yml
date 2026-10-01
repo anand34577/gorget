@@ -1,0 +1,28 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev nftables
+      - run: (cd web && npm ci --no-audit --no-fund && npm run build)
+      - run: (cd desktop/frontend && npm ci --no-audit --no-fund && npm run build)
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: GOOS=windows go vet ./client/... ./cmd/gorget
+      - run: GOOS=darwin go vet ./client/... ./cmd/gorget
+      - run: (cd desktop && go vet ./...)
+      - run: (cd terraform-provider-gorget && go vet ./...)
+      - run: GOOS=windows go build ./... && GOOS=darwin go build ./client/... ./cmd/gorget
+      - run: sh scripts/repro-check.sh
+      - name: Fuzz smoke (30s each)
+        run: |
+          go test ./internal/policy -run '^$' -fuzz 'FuzzParse$' -fuzztime 30s
+          go test ./client/disco -run '^$' -fuzz FuzzOpen -fuzztime 30s
+          go test ./internal/core -run '^$' -fuzz FuzzVersions -fuzztime 20s
+          go test ./internal/scim -run '^$' -fuzz FuzzParseEq -fuzztime 20s

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stop a running service before files are replaced (upgrade). Ignore errors on first install.
+/usr/local/bin/gorget stop-service >/dev/null 2>&1 || true
+exit 0

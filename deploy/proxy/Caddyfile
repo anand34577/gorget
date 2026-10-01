@@ -1,0 +1,11 @@
+vpn.example.com {
+	encode zstd gzip
+	# Long-lived streams: network-map streaming (ConnectRPC over HTTP/2), relay WebSockets and live console updates.
+	reverse_proxy gorget:8080 {
+		transport http {
+			versions h2c 1.1
+		}
+		flush_interval -1
+		stream_timeout 0
+	}
+}

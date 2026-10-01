@@ -1,0 +1,33 @@
+# Gorget behind Caddy (Caddy terminates TLS). Gorget runs with TLS off and trusts Caddy's headers.
+# UDP services (STUN, WireGuard) can't pass through an HTTP proxy, so they are published directly.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ../proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+  gorget:
+    image: ghcr.io/anand34577/gorget:latest
+    build: ../..
+    restart: unless-stopped
+    environment:
+      GORGET_PUBLIC_URL: https://vpn.example.com
+      GORGET_TLS_MODE: "off"
+      GORGET_HTTP_LISTEN: ":8080"
+      GORGET_HTTP_REDIRECT_LISTEN: ""
+      GORGET_TRUSTED_PROXIES: "172.16.0.0/12,10.0.0.0/8"
+    ports: ["3478:3478/udp", "3479:3479/udp", "51820:51820/udp"]
+    volumes: [gorget-data:/var/lib/gorget]
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    read_only: true
+    tmpfs: [/tmp]
+
+volumes:
+  gorget-data:
+  caddy-data:

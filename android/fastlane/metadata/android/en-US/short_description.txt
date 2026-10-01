@@ -1,0 +1,1 @@
+Self-hosted WireGuard mesh VPN. No accounts with us, no telemetry.

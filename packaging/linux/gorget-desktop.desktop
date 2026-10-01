@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Gorget
+Comment=Gorget mesh VPN
+Exec=/usr/bin/gorget-desktop
+Icon=gorget
+Terminal=false
+Categories=Network;Security;
+StartupNotify=false

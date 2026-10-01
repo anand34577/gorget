@@ -1,0 +1,44 @@
+# build output
+/bin/
+/dist/
+*.exe
+internal/web/ui/dist/*
+!internal/web/ui/dist/index.html
+
+# web
+web/node_modules/
+web/*.tsbuildinfo
+
+# local data & secrets
+/data/
+*.db
+*.db-wal
+*.db-shm
+master.key
+setup-token
+*.gbk
+
+# android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/keystore.properties
+android/app/libs/*.aar
+android/app/libs/*-sources.jar
+*.jks
+*.keystore
+.kotlin/
+
+# desktop app
+desktop/frontend/node_modules/
+desktop/frontend/dist/
+desktop/frontend/*.tsbuildinfo
+
+# terraform provider build output
+terraform-provider-gorget/terraform-provider-gorget
+terraform-provider-gorget/terraform-provider-gorget.exe
+
+# docs site
+/dist/
+Claude-Account-1.cmd

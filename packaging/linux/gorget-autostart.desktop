@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Gorget
+Comment=Gorget tray icon
+Exec=/usr/bin/gorget-desktop --hidden
+Icon=gorget
+Terminal=false
+X-GNOME-Autostart-enabled=true

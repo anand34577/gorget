@@ -1,0 +1,4306 @@
+{
+ "openapi": "3.0.3",
+ "info": {
+  "title": "Gorget REST API",
+  "version": "1.0.0",
+  "description": "The API behind the web console. Sign in with a session cookie (send X-CSRF-Token on writes) or use an API token: `Authorization: Bearer gat_...`. Tokens are read-only or read/write. IdP provisioning uses the separate SCIM 2.0 endpoint under /scim/v2."
+ },
+ "servers": [
+  {
+   "url": "/api/v1"
+  }
+ ],
+ "security": [
+  {
+   "bearer": []
+  },
+  {
+   "session": []
+  }
+ ],
+ "components": {
+  "securitySchemes": {
+   "bearer": {
+    "type": "http",
+    "scheme": "bearer",
+    "description": "API token created under Account > API tokens"
+   },
+   "session": {
+    "type": "apiKey",
+    "in": "cookie",
+    "name": "gorget_session"
+   }
+  },
+  "schemas": {
+   "Error": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "message": {
+      "type": "string"
+     },
+     "details": {}
+    }
+   },
+   "Ok": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     }
+    }
+   },
+   "Device": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "native",
+       "wireguard",
+       "gateway"
+      ]
+     },
+     "wg_public_key": {
+      "type": "string"
+     },
+     "ipv4": {
+      "type": "string"
+     },
+     "ipv6": {
+      "type": "string"
+     },
+     "static_ip": {
+      "type": "boolean"
+     },
+     "tags": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "state": {
+      "type": "string",
+      "enum": [
+       "active",
+       "pending",
+       "disabled"
+      ]
+     },
+     "ephemeral": {
+      "type": "boolean"
+     },
+     "key_expiry_disabled": {
+      "type": "boolean"
+     },
+     "key_expires_at": {
+      "type": "integer"
+     },
+     "hostname": {
+      "type": "string"
+     },
+     "os": {
+      "type": "string"
+     },
+     "os_version": {
+      "type": "string"
+     },
+     "client_version": {
+      "type": "string"
+     },
+     "arch": {
+      "type": "string"
+     },
+     "disk_encrypted": {
+      "type": "integer",
+      "description": "0 unknown, 1 yes, 2 no"
+     },
+     "firewall_on": {
+      "type": "integer"
+     },
+     "public_ip": {
+      "type": "string"
+     },
+     "endpoints": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "exit_advertised": {
+      "type": "boolean"
+     },
+     "exit_approved": {
+      "type": "boolean"
+     },
+     "online": {
+      "type": "boolean"
+     },
+     "user_id": {
+      "type": "string"
+     },
+     "user_email": {
+      "type": "string"
+     },
+     "fqdn": {
+      "type": "string"
+     },
+     "key_expired": {
+      "type": "boolean"
+     },
+     "peer_count": {
+      "type": "integer"
+     },
+     "posture": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Security rules the device breaks (empty = compliant)"
+     },
+     "routes": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Route"
+      }
+     },
+     "last_seen_at": {
+      "type": "integer"
+     },
+     "rx_bytes": {
+      "type": "integer"
+     },
+     "tx_bytes": {
+      "type": "integer"
+     },
+     "created_at": {
+      "type": "integer"
+     },
+     "remote_ip": {
+      "type": "string",
+      "description": "Public address the device connects from"
+     },
+     "country": {
+      "type": "string",
+      "description": "ISO country code of remote_ip (needs the country database)"
+     }
+    }
+   },
+   "DeviceSession": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "device_id": {
+      "type": "string"
+     },
+     "started_at": {
+      "type": "integer"
+     },
+     "ended_at": {
+      "type": "integer",
+      "description": "0 while still connected"
+     },
+     "public_ip": {
+      "type": "string"
+     },
+     "country": {
+      "type": "string"
+     },
+     "client_version": {
+      "type": "string"
+     }
+    }
+   },
+   "Route": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "device_id": {
+      "type": "string"
+     },
+     "cidr": {
+      "type": "string"
+     },
+     "advertised": {
+      "type": "boolean"
+     },
+     "approved": {
+      "type": "boolean"
+     },
+     "enabled": {
+      "type": "boolean"
+     },
+     "priority": {
+      "type": "integer"
+     }
+    }
+   },
+   "User": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "email": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "role": {
+      "type": "string",
+      "enum": [
+       "owner",
+       "admin",
+       "network_admin",
+       "auditor",
+       "user"
+      ]
+     },
+     "provider": {
+      "type": "string"
+     },
+     "totp_enabled": {
+      "type": "boolean"
+     },
+     "disabled": {
+      "type": "boolean"
+     },
+     "must_change_password": {
+      "type": "boolean"
+     },
+     "created_at": {
+      "type": "integer"
+     },
+     "last_login_at": {
+      "type": "integer"
+     },
+     "groups": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "device_count": {
+      "type": "integer"
+     },
+     "passkeys": {
+      "type": "integer"
+     }
+    }
+   },
+   "Group": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "description": {
+      "type": "string"
+     },
+     "source": {
+      "type": "string"
+     },
+     "members": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "SetupKey": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "key_prefix": {
+      "type": "string"
+     },
+     "reusable": {
+      "type": "boolean"
+     },
+     "ephemeral": {
+      "type": "boolean"
+     },
+     "auto_approve": {
+      "type": "boolean"
+     },
+     "tags": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "max_uses": {
+      "type": "integer"
+     },
+     "uses": {
+      "type": "integer"
+     },
+     "expires_at": {
+      "type": "integer"
+     },
+     "revoked": {
+      "type": "boolean"
+     }
+    }
+   },
+   "AccessRequest": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "requester_id": {
+      "type": "string"
+     },
+     "requester": {
+      "type": "string"
+     },
+     "target": {
+      "type": "string",
+      "description": "device:<name> or tag:<name>"
+     },
+     "ports": {
+      "type": "string",
+      "description": "22,443 | 8000-9000 | *"
+     },
+     "reason": {
+      "type": "string"
+     },
+     "minutes": {
+      "type": "integer"
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "pending",
+       "approved",
+       "denied",
+       "revoked"
+      ]
+     },
+     "decided_by": {
+      "type": "string"
+     },
+     "decided_at": {
+      "type": "integer"
+     },
+     "granted_until": {
+      "type": "integer"
+     },
+     "created_at": {
+      "type": "integer"
+     }
+    }
+   },
+   "Policy": {
+    "type": "object",
+    "properties": {
+     "version": {
+      "type": "integer"
+     },
+     "document": {
+      "type": "string",
+      "description": "HuJSON policy document"
+     },
+     "comment": {
+      "type": "string"
+     },
+     "created_by": {
+      "type": "string"
+     },
+     "created_at": {
+      "type": "integer"
+     }
+    }
+   },
+   "Posture": {
+    "type": "object",
+    "properties": {
+     "enabled": {
+      "type": "boolean"
+     },
+     "mode": {
+      "type": "string",
+      "enum": [
+       "enforce",
+       "report"
+      ]
+     },
+     "min_client_version": {
+      "type": "string"
+     },
+     "min_os_version": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "string"
+      },
+      "description": "windows, darwin, linux, android"
+     },
+     "require_disk_encryption": {
+      "type": "boolean"
+     },
+     "require_firewall": {
+      "type": "boolean"
+     },
+     "allowed_networks": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "exempt_tags": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "Webhook": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "url": {
+      "type": "string"
+     },
+     "events": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "enabled": {
+      "type": "boolean"
+     },
+     "last_status": {
+      "type": "integer"
+     },
+     "last_error": {
+      "type": "string"
+     }
+    }
+   },
+   "AuditEntry": {
+    "type": "object",
+    "properties": {
+     "seq": {
+      "type": "integer"
+     },
+     "ts": {
+      "type": "integer"
+     },
+     "actor": {
+      "type": "string"
+     },
+     "action": {
+      "type": "string"
+     },
+     "target_type": {
+      "type": "string"
+     },
+     "target_id": {
+      "type": "string"
+     },
+     "target_name": {
+      "type": "string"
+     },
+     "details": {
+      "type": "string"
+     },
+     "ip": {
+      "type": "string"
+     },
+     "hash": {
+      "type": "string"
+     }
+    }
+   }
+  }
+ },
+ "paths": {
+  "/setup/status": {
+   "get": {
+    "tags": [
+     "Setup"
+    ],
+    "summary": "Is first-run setup finished?",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "completed": {
+           "type": "boolean"
+          },
+          "version": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/setup": {
+   "post": {
+    "tags": [
+     "Setup"
+    ],
+    "summary": "Finish first-run setup (needs the one-time setup token)",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "network_name": {
+          "type": "string"
+         },
+         "owner_email": {
+          "type": "string"
+         },
+         "owner_name": {
+          "type": "string"
+         },
+         "password": {
+          "type": "string"
+         },
+         "ipv4": {
+          "type": "string"
+         },
+         "domain": {
+          "type": "string"
+         },
+         "policy": {
+          "type": "string"
+         },
+         "approval_required": {
+          "type": "boolean"
+         },
+         "setup_token": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "owner_email",
+         "password",
+         "setup_token"
+        ]
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/auth/login": {
+   "post": {
+    "tags": [
+     "Auth"
+    ],
+    "summary": "Sign in with email and password",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "csrf_token": {
+           "type": "string"
+          },
+          "mfa_required": {
+           "type": "boolean"
+          },
+          "mfa_methods": {
+           "type": "array",
+           "items": {
+            "type": "string"
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "email": {
+          "type": "string"
+         },
+         "password": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "email",
+         "password"
+        ]
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/auth/logout": {
+   "post": {
+    "tags": [
+     "Auth"
+    ],
+    "summary": "Sign out",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/providers": {
+   "get": {
+    "tags": [
+     "Auth"
+    ],
+    "summary": "List single sign-on providers",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "id": {
+            "type": "string"
+           },
+           "name": {
+            "type": "string"
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/auth/oidc/{id}/start": {
+   "get": {
+    "tags": [
+     "Auth"
+    ],
+    "summary": "Start an OIDC sign-in (redirects)",
+    "responses": {
+     "302": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "security": []
+   }
+  },
+  "/auth/mfa/totp": {
+   "post": {
+    "tags": [
+     "Auth"
+    ],
+    "summary": "Complete sign-in with an authenticator or recovery code",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "code": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/me": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Current user, permissions and features",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/User"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "patch": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Update your profile",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/me/password": {
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Change your password",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "current": {
+          "type": "string"
+         },
+         "new": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/me/sessions": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Your active sign-ins",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/me/tokens": {
+   "get": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Your API tokens",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Create an API token (shown once)",
+    "responses": {
+     "201": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "scopes": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "expires_in_days": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/me/tokens/{id}": {
+   "delete": {
+    "tags": [
+     "Account"
+    ],
+    "summary": "Delete an API token",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/overview": {
+   "get": {
+    "tags": [
+     "Dashboard"
+    ],
+    "summary": "Counts for the dashboard",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/network-map": {
+   "get": {
+    "tags": [
+     "Dashboard"
+    ],
+    "summary": "Devices and the connections the policy allows",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/events": {
+   "get": {
+    "tags": [
+     "Dashboard"
+    ],
+    "summary": "Server-sent events stream of changes",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/devices": {
+   "get": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "List devices",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Device"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "required": false,
+      "description": "search text"
+     },
+     {
+      "name": "kind",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "required": false,
+      "description": "native|wireguard|gateway"
+     }
+    ]
+   }
+  },
+  "/devices/{id}": {
+   "get": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "One device",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Device"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "patch": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Rename, tag, approve, disable, set key expiry or exit-node approval",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Device"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "tags": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "ipv4": {
+          "type": "string"
+         },
+         "key_expiry_disabled": {
+          "type": "boolean"
+         },
+         "exit_approved": {
+          "type": "boolean"
+         },
+         "state": {
+          "type": "string"
+         },
+         "expires_at": {
+          "type": "integer"
+         },
+         "tunnel_mode": {
+          "type": "string"
+         },
+         "custom_allowed_ips": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Delete a device",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{id}/approve": {
+   "post": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Approve a pending device",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Device"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{id}/expire-key": {
+   "post": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Force the device to sign in again",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{id}/access": {
+   "get": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "What this device may reach, and who may reach it",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{id}/wireguard-config": {
+   "get": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Config file for a standard WireGuard device",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/devices/{id}/rotate-psk": {
+   "post": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Rotate the pre-shared key of a WireGuard device",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/wireguard-configs": {
+   "post": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Create a standard WireGuard device (config and QR code)",
+    "responses": {
+     "201": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "user_id": {
+          "type": "string"
+         },
+         "public_key": {
+          "type": "string"
+         },
+         "tunnel_mode": {
+          "type": "string"
+         },
+         "custom_allowed_ips": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "expires_at": {
+          "type": "integer"
+         },
+         "preshared_key": {
+          "type": "boolean"
+         },
+         "dns": {
+          "type": "boolean"
+         },
+         "tags": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "ipv4": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/device-logins/{code}": {
+   "get": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Look up a pending browser sign-in of the desktop or Android app",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "code",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/device-logins/{code}/approve": {
+   "post": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Approve a device sign-in",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "code",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/device-logins/{code}/deny": {
+   "post": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "Deny a device sign-in",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "code",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/users": {
+   "get": {
+    "tags": [
+     "People"
+    ],
+    "summary": "List users",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/User"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Create a user",
+    "responses": {
+     "201": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: manage users",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "email": {
+          "type": "string"
+         },
+         "name": {
+          "type": "string"
+         },
+         "role": {
+          "type": "string"
+         },
+         "password": {
+          "type": "string"
+         },
+         "groups": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "email"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/users/{id}": {
+   "patch": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Change name, role or disable",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/User"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: manage users",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "role": {
+          "type": "string"
+         },
+         "disabled": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Delete a user and their devices",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: manage users",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/users/{id}/reset-mfa": {
+   "post": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Remove a user's second factors",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: manage users",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/users/{id}/reset-password": {
+   "post": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Set a temporary password",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "temporary_password": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: manage users",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/users/{id}/revoke-sessions": {
+   "post": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Sign a user out everywhere",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: manage users",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/groups": {
+   "get": {
+    "tags": [
+     "People"
+    ],
+    "summary": "List groups",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Group"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Create a group",
+    "responses": {
+     "201": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Group"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "description": {
+          "type": "string"
+         },
+         "members": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        },
+        "required": [
+         "name"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/groups/{id}": {
+   "patch": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Edit a group",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Group"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "description": {
+          "type": "string"
+         },
+         "members": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Delete a group",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/policy": {
+   "get": {
+    "tags": [
+     "Access rules"
+    ],
+    "summary": "Current policy",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Policy"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Access rules"
+    ],
+    "summary": "Save a new policy version (tests must pass)",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Policy"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "document": {
+          "type": "string"
+         },
+         "comment": {
+          "type": "string"
+         },
+         "expect_version": {
+          "type": "integer"
+         }
+        },
+        "required": [
+         "document"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/policy/validate": {
+   "post": {
+    "tags": [
+     "Access rules"
+    ],
+    "summary": "Check a policy document and run its tests",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "document": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "document"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/policy/check": {
+   "post": {
+    "tags": [
+     "Access rules"
+    ],
+    "summary": "Simulate: may src reach dst?",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "src": {
+          "type": "string"
+         },
+         "dst": {
+          "type": "string"
+         },
+         "port": {
+          "type": "integer"
+         },
+         "proto": {
+          "type": "string"
+         },
+         "document": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "src",
+         "dst"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/policy/versions": {
+   "get": {
+    "tags": [
+     "Access rules"
+    ],
+    "summary": "Version history",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Policy"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/policy/versions/{v}": {
+   "get": {
+    "tags": [
+     "Access rules"
+    ],
+    "summary": "One version",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Policy"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "v",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/policy/versions/{v}/restore": {
+   "post": {
+    "tags": [
+     "Access rules"
+    ],
+    "summary": "Roll back to a version",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Policy"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "parameters": [
+     {
+      "name": "v",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/access-requests": {
+   "get": {
+    "tags": [
+     "Temporary access"
+    ],
+    "summary": "Requests (all for administrators, your own otherwise)",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/AccessRequest"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Temporary access"
+    ],
+    "summary": "Ask for temporary access to a device or tag",
+    "responses": {
+     "201": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccessRequest"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "target": {
+          "type": "string"
+         },
+         "ports": {
+          "type": "string"
+         },
+         "reason": {
+          "type": "string"
+         },
+         "minutes": {
+          "type": "integer"
+         }
+        },
+        "required": [
+         "target",
+         "minutes"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/access-requests/{id}/approve": {
+   "post": {
+    "tags": [
+     "Temporary access"
+    ],
+    "summary": "Approve (optionally with a different duration)",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccessRequest"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "minutes": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/access-requests/{id}/deny": {
+   "post": {
+    "tags": [
+     "Temporary access"
+    ],
+    "summary": "Deny",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccessRequest"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/access-requests/{id}/revoke": {
+   "post": {
+    "tags": [
+     "Temporary access"
+    ],
+    "summary": "End approved access early",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccessRequest"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/access-grants": {
+   "post": {
+    "tags": [
+     "Temporary access"
+    ],
+    "summary": "Give a person (for example a guest) temporary access directly",
+    "responses": {
+     "201": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccessRequest"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "user_id": {
+          "type": "string"
+         },
+         "target": {
+          "type": "string"
+         },
+         "ports": {
+          "type": "string"
+         },
+         "reason": {
+          "type": "string"
+         },
+         "minutes": {
+          "type": "integer"
+         }
+        },
+        "required": [
+         "user_id",
+         "target",
+         "minutes"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/routes": {
+   "get": {
+    "tags": [
+     "Routes"
+    ],
+    "summary": "Subnet routes and exit nodes",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Routes"
+    ],
+    "summary": "Add a network behind a standard WireGuard device (a site router)",
+    "responses": {
+     "201": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Route"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "device_id": {
+          "type": "string"
+         },
+         "cidr": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "device_id",
+         "cidr"
+        ]
+       }
+      }
+     }
+    }
+   }
+  },
+  "/stats": {
+   "get": {
+    "tags": [
+     "Insights"
+    ],
+    "summary": "Usage over time, breakdowns and recent connections",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "range",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "required": false,
+      "description": "24h (default), 7d, 30d or 90d"
+     }
+    ]
+   }
+  },
+  "/devices/{id}/sessions": {
+   "get": {
+    "tags": [
+     "Devices"
+    ],
+    "summary": "When the device was connected and from which public address",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/DeviceSession"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/geoip": {
+   "get": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "Country database status",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/geoip/update": {
+   "post": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "Download the latest free country database",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin"
+   }
+  },
+  "/settings/email": {
+   "get": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "Email (SMTP) settings without the password, and delivery status",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "Save email settings; send password to replace it, omit it to keep the stored one",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {}
+       }
+      }
+     }
+    }
+   }
+  },
+  "/settings/email/test": {
+   "post": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "Send a test message",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "to": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/users/{id}/invite": {
+   "post": {
+    "tags": [
+     "People"
+    ],
+    "summary": "Email a one-time link to choose a password",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: admin",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/auth/forgot-password": {
+   "post": {
+    "tags": [
+     "Auth"
+    ],
+    "summary": "Email a password reset link (same answer whether or not the account exists)",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "email": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "email"
+        ]
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/auth/reset-password": {
+   "post": {
+    "tags": [
+     "Auth"
+    ],
+    "summary": "Set a new password with a one-time link",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "token": {
+          "type": "string"
+         },
+         "password": {
+          "type": "string"
+         }
+        },
+        "required": [
+         "token",
+         "password"
+        ]
+       }
+      }
+     }
+    },
+    "security": []
+   }
+  },
+  "/routes/{id}": {
+   "patch": {
+    "tags": [
+     "Routes"
+    ],
+    "summary": "Approve, enable or prioritise a route",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Route"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "approved": {
+          "type": "boolean"
+         },
+         "enabled": {
+          "type": "boolean"
+         },
+         "priority": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "tags": [
+     "Routes"
+    ],
+    "summary": "Remove a route",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/setup-keys": {
+   "get": {
+    "tags": [
+     "Setup keys"
+    ],
+    "summary": "List setup keys",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/SetupKey"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Setup keys"
+    ],
+    "summary": "Create a setup key (shown once)",
+    "responses": {
+     "201": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "reusable": {
+          "type": "boolean"
+         },
+         "ephemeral": {
+          "type": "boolean"
+         },
+         "auto_approve": {
+          "type": "boolean"
+         },
+         "tags": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "max_uses": {
+          "type": "integer"
+         },
+         "expires_in_days": {
+          "type": "integer"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/setup-keys/{id}/revoke": {
+   "post": {
+    "tags": [
+     "Setup keys"
+    ],
+    "summary": "Revoke a setup key",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/setup-keys/{id}": {
+   "delete": {
+    "tags": [
+     "Setup keys"
+    ],
+    "summary": "Delete a setup key",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/settings": {
+   "get": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "All settings sections and derived values",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/settings/{section}": {
+   "put": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "Replace one section: network, dns, devices, client, auth, gateway, posture or routing",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: network admin",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {}
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "section",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/settings/network/readdress": {
+   "post": {
+    "tags": [
+     "Settings"
+    ],
+    "summary": "Preview or apply a new address range",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "description": "Needs: owner",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "ipv4": {
+          "type": "string"
+         },
+         "ipv6": {
+          "type": "string"
+         },
+         "dry_run": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sso-providers": {
+   "get": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "OIDC providers",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "Add a provider",
+    "responses": {
+     "201": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "issuer": {
+          "type": "string"
+         },
+         "client_id": {
+          "type": "string"
+         },
+         "client_secret": {
+          "type": "string"
+         },
+         "scopes": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "groups_claim": {
+          "type": "string"
+         },
+         "allowed_domains": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "auto_create_users": {
+          "type": "boolean"
+         },
+         "default_role": {
+          "type": "string"
+         },
+         "sync_groups": {
+          "type": "boolean"
+         },
+         "enabled": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/sso-providers/{id}": {
+   "patch": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "Edit a provider",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "Remove a provider",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/sso-providers/test": {
+   "post": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "Check that an issuer answers",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "issuer": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/scim": {
+   "get": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "SCIM provisioning status and endpoint",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "Turn SCIM provisioning off",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/scim/token": {
+   "post": {
+    "tags": [
+     "Single sign-on"
+    ],
+    "summary": "Create a SCIM token (shown once) and turn provisioning on",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "token": {
+           "type": "string"
+          },
+          "base_url": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/webhooks": {
+   "get": {
+    "tags": [
+     "Webhooks"
+    ],
+    "summary": "List webhooks and the available events",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Webhooks"
+    ],
+    "summary": "Add a webhook (the signing secret is shown once)",
+    "responses": {
+     "201": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "url": {
+          "type": "string"
+         },
+         "events": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "enabled": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/webhooks/{id}": {
+   "patch": {
+    "tags": [
+     "Webhooks"
+    ],
+    "summary": "Edit a webhook",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "url": {
+          "type": "string"
+         },
+         "events": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "enabled": {
+          "type": "boolean"
+         }
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   },
+   "delete": {
+    "tags": [
+     "Webhooks"
+    ],
+    "summary": "Remove a webhook",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Ok"
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/webhooks/{id}/test": {
+   "post": {
+    "tags": [
+     "Webhooks"
+    ],
+    "summary": "Send a test event",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ]
+   }
+  },
+  "/audit": {
+   "get": {
+    "tags": [
+     "Operations"
+    ],
+    "summary": "Activity log",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/AuditEntry"
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "required": false,
+      "description": ""
+     },
+     {
+      "name": "before",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "required": false,
+      "description": ""
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "required": false,
+      "description": ""
+     }
+    ]
+   }
+  },
+  "/audit/verify": {
+   "get": {
+    "tags": [
+     "Operations"
+    ],
+    "summary": "Check the log's hash chain",
+    "responses": {
+     "200": {
+      "description": "OK",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "entries": {
+           "type": "integer"
+          },
+          "ok": {
+           "type": "boolean"
+          },
+          "first_broken_seq": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/system/status": {
+   "get": {
+    "tags": [
+     "Operations"
+    ],
+    "summary": "Database, gateway, TLS, relay and cluster status",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api-tokens": {
+   "get": {
+    "tags": [
+     "Operations"
+    ],
+    "summary": "All API tokens (administrators)",
+    "responses": {
+     "200": {
+      "description": "OK"
+     },
+     "default": {
+      "description": "Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

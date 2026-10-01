@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gorget</string>
+    <string name="tile_label">Gorget VPN</string>
+    <string name="widget_label">Gorget status</string>
+    <string name="widget_connected">Connected</string>
+    <string name="widget_disconnected">Not connected</string>
+    <string name="widget_connecting">Connecting…</string>
+    <string name="widget_tap_connect">Tap to connect</string>
+    <string name="widget_tap_disconnect">Tap to disconnect</string>
+    <string name="notif_channel_status">Connection status</string>
+    <string name="notif_channel_status_desc">Sign-in, approval and disconnection alerts</string>
+</resources>

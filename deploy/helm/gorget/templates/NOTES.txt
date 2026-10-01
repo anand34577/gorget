@@ -1,0 +1,14 @@
+Gorget is installing.
+
+First run: read the one-time setup token from the log, then open {{ .Values.publicUrl }}/setup
+  kubectl logs deploy/{{ include "gorget.fullname" . }} | grep setup_token
+{{- if eq (include "gorget.clustered" .) "true" }}
+
+Cluster mode is on ({{ .Values.replicaCount }} replicas on PostgreSQL). Every replica is a relay;
+see docs/CLUSTER.md for giving each replica its own address so clients can pick the nearest.
+{{- end }}
+{{- if or .Values.stun.enabled .Values.relay.udp.enabled }}
+
+The UDP ports (STUN {{ .Values.stun.port }}{{ if .Values.relay.udp.enabled }}, relay {{ .Values.relay.udp.port }}{{ end }}) are exposed by the Service {{ include "gorget.fullname" . }}-udp.
+Point stun.advertise and relay.udp.advertise at its external address.
+{{- end }}

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: gorget
+description: Gorget self-hosted WireGuard mesh VPN server (control plane, relay, STUN and optional WireGuard gateway)
+type: application
+version: 0.3.0
+appVersion: "0.3.0"
+home: https://github.com/anand34577/gorget
+sources:
+  - https://github.com/anand34577/gorget
+keywords: [vpn, wireguard, mesh, zero-trust]

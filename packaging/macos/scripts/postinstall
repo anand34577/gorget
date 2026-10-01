@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+GORGET=/usr/local/bin/gorget
+# Register and start the launchd service (idempotent: ignore "already installed").
+"$GORGET" install-service >/dev/null 2>&1 || "$GORGET" start-service || true
+
+# Let the person sitting at the Mac control the VPN without sudo.
+USER_NAME=$(stat -f%Su /dev/console 2>/dev/null || true)
+if [ -n "$USER_NAME" ] && [ "$USER_NAME" != root ] && [ ! -s "/Library/Application Support/Gorget/operator" ]; then
+    "$GORGET" operator set "$USER_NAME" || true
+fi
+
+# Start the tray app at login for that user.
+UID_NUM=$(id -u "$USER_NAME" 2>/dev/null || true)
+if [ -n "$UID_NUM" ] && [ "$UID_NUM" != 0 ]; then
+    launchctl bootstrap "gui/$UID_NUM" /Library/LaunchAgents/net.gorget.desktop.plist >/dev/null 2>&1 || true
+fi
+exit 0

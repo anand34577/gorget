@@ -1,0 +1,93 @@
+# Gorget server on Kubernetes.
+#
+# Quick start (single replica, SQLite on a volume):
+#   helm install gorget ./deploy/helm/gorget \
+#     --set publicUrl=https://vpn.example.com --set masterKey.value=$(gorget-server gen-master-key) \
+#     --set ingress.enabled=true --set ingress.host=vpn.example.com
+#
+# Several replicas need PostgreSQL (database.driver=postgres); they then run as a cluster:
+# every replica is also a relay and clients use the nearest one (see docs/CLUSTER.md).
+
+image:
+  repository: ghcr.io/anand34577/gorget
+  tag: "" # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+
+# Public URL clients and browsers use (required).
+publicUrl: ""
+
+replicaCount: 1
+
+# TLS is normally terminated by the ingress. "acme" makes the server fetch Let's Encrypt
+# certificates itself (then use service.type=LoadBalancer and no ingress).
+tls:
+  mode: "off" # off | acme | custom
+  email: ""
+
+database:
+  driver: sqlite # sqlite | postgres
+  # PostgreSQL: a Secret holding the connection URL under the key "dsn" ...
+  existingSecret: ""
+  # ... or inline (stored in a Secret created by this chart).
+  dsn: ""
+
+# Master key encrypting secrets at rest (base64, 32 bytes: gorget-server gen-master-key).
+# Use an existing Secret with the key "master-key", or let the chart create one. Keep it safe:
+# backups cannot be restored without it.
+masterKey:
+  existingSecret: ""
+  value: ""
+
+persistence:
+  enabled: true # SQLite database and backups
+  size: 2Gi
+  storageClass: ""
+  existingClaim: ""
+
+relay:
+  region: default
+  udp:
+    enabled: true
+    port: 3479
+    advertise: "" # host:port clients use; defaults to <public host>:<port>
+
+stun:
+  enabled: true
+  port: 3478
+  advertise: "" # defaults to <public host>:3478
+
+# The WireGuard gateway for standard WireGuard apps needs NET_ADMIN and /dev/net/tun; most clusters
+# leave it off and use the Gorget apps instead.
+gateway:
+  enabled: false
+  port: 51820
+  endpoint: ""
+
+service:
+  type: ClusterIP # LoadBalancer when the server terminates TLS itself
+  annotations: {}
+  # STUN, the UDP relay and the gateway are UDP and need their own address.
+  udp:
+    type: LoadBalancer
+    annotations: {}
+    loadBalancerIP: ""
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tlsSecretName: ""
+  annotations: {}
+
+metrics:
+  enabled: false
+  token: ""
+
+# Extra environment variables, e.g. - {name: GORGET_LOG_LEVEL, value: debug}
+extraEnv: []
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

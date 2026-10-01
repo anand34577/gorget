@@ -1,0 +1,370 @@
+syntax = "proto3";
+
+package gorget.v1;
+
+option go_package = "github.com/anand34577/gorget/gen/gorget/v1;gorgetv1";
+
+// ControlService is the API between a native Gorget client (daemon) and the
+// management server. Transport: ConnectRPC over TLS 1.3 (HTTP/2 or HTTP/1.1).
+//
+// Authentication:
+//   * Unauthenticated: GetServerInfo, GetChallenge, Register, StartInteractiveLogin,
+//     PollInteractiveLogin, Authenticate.
+//   * Everything else requires "Authorization: Bearer <session token>" obtained
+//     from Authenticate. The token is bound to the device's machine key.
+//
+// Proof of machine-key possession: the client signs
+//   "gorget-v1|<purpose>|<nonce>|<machine_key>"
+// with its Ed25519 machine key, where purpose is "register" or "auth" and the
+// nonce comes from GetChallenge (single use, short-lived).
+service ControlService {
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse);
+  rpc GetChallenge(GetChallengeRequest) returns (GetChallengeResponse);
+  rpc StartInteractiveLogin(StartInteractiveLoginRequest) returns (StartInteractiveLoginResponse);
+  rpc PollInteractiveLogin(PollInteractiveLoginRequest) returns (PollInteractiveLoginResponse);
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
+
+  rpc WatchNetworkMap(WatchNetworkMapRequest) returns (stream WatchNetworkMapResponse);
+  rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse);
+  rpc SendSignal(SendSignalRequest) returns (SendSignalResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+}
+
+// ---------- discovery & login ----------
+
+message GetServerInfoRequest {}
+
+message GetServerInfoResponse {
+  string server_version = 1;
+  uint32 protocol_version = 2;
+  uint32 min_protocol_version = 3;
+  string network_name = 4;
+  bool interactive_login_enabled = 5;
+  repeated string sso_providers = 6;
+}
+
+message GetChallengeRequest {
+  // Ed25519 public key, base64 (std, padded).
+  string machine_key = 1;
+}
+
+message GetChallengeResponse {
+  string nonce = 1;
+  int64 expires_at_unix = 2;
+}
+
+message StartInteractiveLoginRequest {
+  string machine_key = 1;
+  string hostname = 2;
+  string os = 3;
+}
+
+message StartInteractiveLoginResponse {
+  string login_id = 1;
+  // URL to open in a browser. Contains the user code.
+  string login_url = 2;
+  string user_code = 3;
+  int64 expires_at_unix = 4;
+  uint32 poll_interval_seconds = 5;
+}
+
+message PollInteractiveLoginRequest {
+  string login_id = 1;
+  string machine_key = 2;
+}
+
+enum LoginStatus {
+  LOGIN_STATUS_UNSPECIFIED = 0;
+  LOGIN_STATUS_PENDING = 1;
+  LOGIN_STATUS_APPROVED = 2;
+  LOGIN_STATUS_DENIED = 3;
+  LOGIN_STATUS_EXPIRED = 4;
+}
+
+message PollInteractiveLoginResponse {
+  LoginStatus status = 1;
+  // Single-use token accepted by Register when status is APPROVED.
+  string login_token = 2;
+}
+
+message RegisterRequest {
+  string machine_key = 1;
+  string nonce = 2;
+  string signature = 3;
+
+  // Exactly one of setup_key / login_token.
+  string setup_key = 4;
+  string login_token = 5;
+
+  string wireguard_public_key = 6;
+  // X25519 public key used to seal peer-to-peer signalling messages.
+  string disco_public_key = 7;
+  HostInfo host = 8;
+  // Requested device name; server may adjust for uniqueness.
+  string name = 9;
+  bool ephemeral = 10;
+}
+
+enum DeviceState {
+  DEVICE_STATE_UNSPECIFIED = 0;
+  DEVICE_STATE_ACTIVE = 1;
+  DEVICE_STATE_PENDING_APPROVAL = 2;
+  DEVICE_STATE_DISABLED = 3;
+  DEVICE_STATE_EXPIRED = 4;
+}
+
+message RegisterResponse {
+  string device_id = 1;
+  DeviceState state = 2;
+  string ipv4 = 3;
+  string ipv6 = 4;
+  string fqdn = 5;
+}
+
+message AuthenticateRequest {
+  string machine_key = 1;
+  string nonce = 2;
+  string signature = 3;
+  // Lets the client rotate its WireGuard / disco keys during authentication.
+  string wireguard_public_key = 4;
+  string disco_public_key = 5;
+  HostInfo host = 6;
+}
+
+message AuthenticateResponse {
+  string session_token = 1;
+  int64 expires_at_unix = 2;
+  string device_id = 3;
+  DeviceState state = 4;
+  int64 key_expires_at_unix = 5;
+}
+
+message HostInfo {
+  string hostname = 1;
+  string os = 2;           // linux, windows, darwin, android
+  string os_version = 3;
+  string client_version = 4;
+  string arch = 5;
+  repeated string capabilities = 6;
+  // Device posture, reported by the client and checked against the admin's posture rules.
+  Tri disk_encrypted = 7;
+  Tri firewall_enabled = 8;
+}
+
+enum Tri {
+  TRI_UNSPECIFIED = 0;  // not reported / unknown
+  TRI_YES = 1;
+  TRI_NO = 2;
+}
+
+// ---------- network map ----------
+
+message WatchNetworkMapRequest {
+  // Last serial the client applied; 0 forces a full map.
+  uint64 last_serial = 1;
+}
+
+message WatchNetworkMapResponse {
+  oneof update {
+    NetworkMap full = 1;
+    NetworkMapDelta delta = 2;
+    PeerSignal signal = 3;
+    KeepAlive keepalive = 4;
+    ServerNotice notice = 5;
+  }
+}
+
+message KeepAlive {
+  int64 server_time_unix = 1;
+}
+
+message ServerNotice {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_DEVICE_DISABLED = 1;
+    KIND_KEY_EXPIRED = 2;
+    KIND_LOGGED_OUT = 3;
+    KIND_APPROVAL_PENDING = 4;
+    KIND_MESSAGE = 5;
+    // The device doesn't meet the posture rules; the message lists what to fix. The stream stays open.
+    KIND_POSTURE_FAILED = 6;
+  }
+  Kind kind = 1;
+  string message = 2;
+}
+
+message NetworkMap {
+  uint64 serial = 1;
+  SelfNode self = 2;
+  repeated Peer peers = 3;
+  DNSConfig dns = 4;
+  repeated FirewallRule firewall_rules = 5;
+  repeated RelayServer relays = 6;
+  repeated string stun_servers = 7;
+  ClientSettings settings = 8;
+  // Domains that clients route through an exit node (resolved names are routed on demand).
+  repeated DomainRoute domain_routes = 9;
+}
+
+// Only changed sections are present. Peers are diffed by id.
+message NetworkMapDelta {
+  uint64 serial = 1;
+  SelfNode self = 2;
+  repeated Peer peers_upserted = 3;
+  repeated string peers_removed = 4;
+  DNSConfig dns = 5;
+  FirewallRuleSet firewall = 6;
+  RelaySet relays = 7;
+  ClientSettings settings = 8;
+  DomainRouteSet domain_routes = 9;
+}
+
+message DomainRoute {
+  // A name such as "example.com"; it and all its subdomains are routed.
+  string domain = 1;
+  // The exit node peer that carries the traffic to those names.
+  string via_peer_id = 2;
+}
+
+message DomainRouteSet {
+  repeated DomainRoute routes = 1;
+}
+
+message SelfNode {
+  string id = 1;
+  string name = 2;
+  string fqdn = 3;
+  string ipv4 = 4;           // address with prefix, e.g. 100.80.0.5/32
+  string ipv6 = 5;
+  string network_cidr_v4 = 6;
+  string network_cidr_v6 = 7;
+  repeated string tags = 8;
+  string user_email = 9;
+  int64 key_expires_at_unix = 10;
+  // Routes this node advertises that were approved by an admin.
+  repeated string approved_routes = 11;
+  bool exit_node_approved = 12;
+}
+
+message Peer {
+  string id = 1;
+  string name = 2;
+  string fqdn = 3;
+  string wireguard_public_key = 4;
+  string disco_public_key = 5;
+  repeated string addresses = 6;      // overlay addresses (/32, /128)
+  repeated string allowed_ips = 7;    // addresses + approved subnet routes
+  repeated string endpoints = 8;      // known ip:port candidates
+  string home_relay = 9;
+  bool online = 10;
+  int64 last_seen_unix = 11;
+  string os = 12;
+  repeated string tags = 13;
+  string user = 14;
+  bool is_exit_node = 15;
+  bool is_gateway = 16;
+  repeated string subnet_routes = 17;
+  uint32 keepalive_seconds = 18;
+}
+
+message FirewallRuleSet {
+  repeated FirewallRule rules = 1;
+}
+
+// Inbound rule: traffic from src to this node (or its subnets) is accepted.
+// Default action is deny.
+message FirewallRule {
+  repeated string src_cidrs = 1;
+  repeated string dst_cidrs = 2;
+  repeated PortRange ports = 3;   // empty = all ports
+  repeated string protocols = 4;  // tcp, udp, icmp; empty = any
+}
+
+message PortRange {
+  uint32 first = 1;
+  uint32 last = 2;
+}
+
+message DNSConfig {
+  bool magic_dns = 1;
+  string domain = 2;
+  repeated string search_domains = 3;
+  repeated string nameservers = 4;          // ip, ip:port, https://..., tls://...
+  repeated SplitDNSRoute split = 5;
+  repeated DNSRecord records = 6;
+  bool override_local_dns = 7;
+}
+
+message SplitDNSRoute {
+  string domain = 1;
+  repeated string nameservers = 2;
+}
+
+message DNSRecord {
+  string name = 1;
+  string type = 2;   // A, AAAA, CNAME
+  string value = 3;
+}
+
+message RelaySet {
+  repeated RelayServer relays = 1;
+}
+
+message RelayServer {
+  string region = 1;
+  string name = 2;
+  string url = 3;    // wss://host/relay
+  string udp_addr = 4; // host:port of the UDP relay (empty = WebSocket only)
+}
+
+message ClientSettings {
+  bool allow_lan_access_default = 1;
+  bool kill_switch_enforced = 2;
+  string forced_exit_node_id = 3;
+  string default_exit_node_id = 4;
+  uint32 mtu = 5;
+  bool allow_user_exit_node_choice = 6;
+  bool allow_custom_dns = 7;
+}
+
+// ---------- status & signalling ----------
+
+message UpdateStatusRequest {
+  repeated string endpoints = 1;
+  string home_relay = 2;
+  // Routes the device wants to advertise (need admin approval).
+  repeated string advertised_routes = 3;
+  bool advertise_exit_node = 4;
+  HostInfo host = 5;
+  repeated PeerStatus peers = 6;
+  string selected_exit_node_id = 7;
+}
+
+message PeerStatus {
+  string peer_id = 1;
+  bool direct = 2;
+  uint32 latency_ms = 3;
+  uint64 rx_bytes = 4;
+  uint64 tx_bytes = 5;
+  int64 last_handshake_unix = 6;
+}
+
+message UpdateStatusResponse {}
+
+message SendSignalRequest {
+  string to_peer_id = 1;
+  // NaCl box sealed with sender disco private key and receiver disco public key.
+  bytes sealed = 2;
+}
+
+message SendSignalResponse {}
+
+message PeerSignal {
+  string from_peer_id = 1;
+  string from_disco_key = 2;
+  bytes sealed = 3;
+}
+
+message LogoutRequest {}
+message LogoutResponse {}

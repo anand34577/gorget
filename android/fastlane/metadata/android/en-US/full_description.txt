@@ -1,0 +1,13 @@
+Gorget connects your phone to a private network that you run yourself. Nothing ever leaves your own server: there is no account with us, no analytics, no crash reporting and no external fonts or libraries phoning home.
+
+<b>What you get</b>
+* Direct, encrypted connections between your devices (WireGuard), with automatic NAT traversal and a relay fallback that works on networks that block UDP
+* Optional protection against future quantum computers between your Gorget devices
+* Exit nodes: send all internet traffic through a device you choose, with a kill switch
+* Per-app routing: choose which apps use the VPN
+* Device names that work everywhere (laptop.gorget.internal), shared subnets and split DNS
+* Always-on VPN, quick settings tile, home-screen widget, Android TV support
+
+<b>You need</b> a Gorget server (open source, AGPL-3.0): https://github.com/anand34577/gorget
+
+The app is signed with the project's own key; checksums and signatures are published with every release.
