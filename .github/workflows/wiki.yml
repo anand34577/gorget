@@ -1,0 +1,40 @@
+name: wiki
+# Publishes docs/ to the GitHub wiki so it always matches main. docs/ is the source of truth;
+# edits made directly in the wiki are overwritten on the next run.
+# GitHub only creates the wiki's git repository once its first page exists: open the Wiki tab
+# and save any page once, then run this workflow.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'mkdocs.yml', 'SECURITY.md', 'CHANGELOG.md', 'scripts/docs-to-wiki.py']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: { group: wiki, cancel-in-progress: false }
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install pyyaml
+      - name: Build pages
+        run: python scripts/docs-to-wiki.py "$RUNNER_TEMP/pages"
+      - name: Push to the wiki
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          if ! git clone --depth 1 "$url" "$RUNNER_TEMP/wiki"; then
+            echo "::error::The wiki has no pages yet. Open the Wiki tab, save the first page, then run this workflow again."
+            exit 1
+          fi
+          cd "$RUNNER_TEMP/wiki"
+          git rm -rq --ignore-unmatch .
+          cp "$RUNNER_TEMP"/pages/*.md .
+          git add -A
+          if git diff --cached --quiet; then echo "Wiki is up to date."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Update from ${GITHUB_SHA::7}"
+          git push -q origin HEAD

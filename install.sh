@@ -101,7 +101,8 @@ if [ "$UNINSTALL" -eq 1 ]; then
 		if have dnf; then as_root dnf remove -y gorget; elif have zypper; then as_root zypper -n remove gorget; else as_root rpm -e gorget; fi
 	elif [ "$OS" = darwin ]; then
 		as_root /usr/local/bin/gorget uninstall-service >/dev/null 2>&1 || true
-		for u in $(ls /Users 2>/dev/null); do
+		for d in /Users/*; do
+			u=${d##*/}
 			id "$u" >/dev/null 2>&1 && as_root launchctl bootout "gui/$(id -u "$u")/net.gorget.desktop" >/dev/null 2>&1 || true
 		done
 		as_root rm -f /Library/LaunchAgents/net.gorget.desktop.plist /usr/local/bin/gorget

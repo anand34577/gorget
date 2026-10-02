@@ -16,6 +16,8 @@ A self-hosted, open-source WireGuard® mesh VPN. You run the server; nothing eve
 
 > Status: the server, web console, Android app and desktop clients (Linux, Windows, macOS: `gorget` service/CLI plus a tray app) are written; real-device testing is in progress. See [docs/STATUS.md](docs/STATUS.md).
 >
+> Documentation: the [wiki](https://github.com/anand34577/gorget/wiki) has every guide. It is generated from [docs/](docs/), so edit the files there.
+
 > New here? [Your home network, from anywhere](docs/guide/homelab.md) walks through a VPS server, a home LAN with VLANs, laptops, phones and family members step by step.
 
 ## Quick start (Docker)
