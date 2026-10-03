@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Easier install and clearer documentation
+- **One-command server install:** `install-server.sh` now asks only for your domain (or takes
+  `--domain` and `--yes`), installs and starts the service, and prints the setup link. `--docker`
+  runs the server in Docker instead; running it again upgrades; `--uninstall` removes it.
+- **`gorget-server install` prints the setup link** when the service is up, and the new
+  `gorget-server setup-link` prints it again at any time. No more digging through logs.
+- **`gorget-server init` can run without questions:** `init -yes -domain vpn.example.com`
+  (also `-tls`, `-email`, `-database-url`, `-gateway`, `-data-dir`).
+- **Docker:** the compose files read a small `.env` file (`GORGET_DOMAIN`, `GORGET_EMAIL`,
+  `GORGET_VERSION`) instead of needing YAML edits, and work without cloning the repository.
+- **Documentation rewritten:** a [Quick start](docs/guide/quickstart.md), a step-by-step
+  [Install the server](docs/guide/install-server.md) with a "which method" table, per-system
+  [Install the apps](docs/guide/install-clients.md), a full [configuration
+  reference](docs/guide/configuration.md), a longer [troubleshooting](docs/ops/troubleshooting.md)
+  page, and upgrade and move-server steps in [Backups and upgrades](docs/ops/backups.md).
+
 ## 0.4.0
 
 ### New

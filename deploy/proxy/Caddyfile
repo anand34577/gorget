@@ -1,4 +1,4 @@
-vpn.example.com {
+{$GORGET_DOMAIN} {
 	encode zstd gzip
 	# Long-lived streams: network-map streaming (ConnectRPC over HTTP/2), relay WebSockets and live console updates.
 	reverse_proxy gorget:8080 {

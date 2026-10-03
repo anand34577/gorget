@@ -5,7 +5,7 @@ helm install gorget ./deploy/helm/gorget \
   --set publicUrl=https://vpn.example.com \
   --set masterKey.value=$(gorget-server gen-master-key) \
   --set ingress.enabled=true --set ingress.host=vpn.example.com
-kubectl logs deploy/gorget-gorget | grep setup_token
+kubectl exec deploy/gorget-gorget -- gorget-server setup-link
 ```
 
 The default is one replica with SQLite on a volume and TLS terminated by the ingress. The chart:

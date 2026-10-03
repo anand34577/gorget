@@ -29,93 +29,142 @@ func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	path := fs.String("config", defaultInitPath(), "where to write the configuration file")
 	force := fs.Bool("force", false, "overwrite an existing configuration file")
+	// Flags that answer the questions, for scripts and for people who want no prompts.
+	yesAll := fs.Bool("yes", false, "don't ask: use the flags below and the defaults (needs -domain)")
+	domainF := fs.String("domain", "", "domain name of this server, e.g. vpn.example.com")
+	tlsF := fs.String("tls", "", "HTTPS: acme (Let's Encrypt), proxy (behind a reverse proxy) or private (own CA)")
+	emailF := fs.String("email", "", "email for certificate expiry notices (acme only)")
+	dbF := fs.String("database-url", "", "PostgreSQL URL (default: SQLite)")
+	gatewayF := fs.String("gateway", "", "yes or no: let standard WireGuard apps connect (default yes; no on Windows)")
+	dataF := fs.String("data-dir", "", "where to keep data (database, keys, backups)")
 	_ = fs.Parse(args)
 
 	if _, err := os.Stat(*path); err == nil && !*force {
 		return fmt.Errorf("%s already exists. Check it with: gorget-server check -config %s (or rerun init with -force to start over)", *path, *path)
 	}
 	in := bufio.NewReader(os.Stdin)
-	fmt.Println("Gorget server setup. Press Enter to accept the suggestion in [brackets].")
-	fmt.Println()
+	scripted := *yesAll || *domainF != ""
+	if !scripted {
+		fmt.Println("Gorget server setup. Press Enter to accept the suggestion in [brackets].")
+		fmt.Println()
+	}
+	// answer returns the flag value when given, the default when running without prompts,
+	// and otherwise asks.
+	answer := func(flagVal, prompt, def string) string {
+		switch {
+		case flagVal != "":
+			return flagVal
+		case scripted:
+			return def
+		}
+		return ask(in, prompt, def)
+	}
 
 	// 1. Address.
 	var host string
 	for {
-		host = ask(in, "1/5  Domain name of this server (people and apps use it), e.g. vpn.example.com", "")
+		host = answer(*domainF, "1/5  Domain name of this server (people and apps use it), e.g. vpn.example.com", "")
 		host = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(host), "https://"), "http://"), "/")
-		if host == "" {
-			fmt.Println("     A domain (or for a private test, this machine's IP address) is required.")
-			continue
+		msg := ""
+		switch {
+		case host == "":
+			msg = "A domain (or for a private test, this machine's IP address) is required."
+		case strings.ContainsAny(host, " /"):
+			msg = "Enter only the name, like vpn.example.com."
 		}
-		if strings.ContainsAny(host, " /") {
-			fmt.Println("     Enter only the name, like vpn.example.com.")
-			continue
+		if msg == "" {
+			break
 		}
-		break
+		if scripted {
+			return errors.New("-domain: " + msg)
+		}
+		fmt.Println("     " + msg)
 	}
 	isIP := net.ParseIP(strings.Trim(host, "[]")) != nil
 
 	// 2. HTTPS.
-	fmt.Println()
-	fmt.Println("2/5  How should HTTPS work?")
-	fmt.Println("     1) Gorget gets a free certificate from Let's Encrypt (recommended; ports 80 and 443 must reach this machine)")
-	fmt.Println("     2) A reverse proxy (Caddy, nginx, Traefik) in front handles HTTPS; Gorget listens on 127.0.0.1:8080")
-	fmt.Println("     3) Private or test setup: Gorget makes its own certificate authority (browsers warn until you trust it)")
+	if !scripted {
+		fmt.Println()
+		fmt.Println("2/5  How should HTTPS work?")
+		fmt.Println("     1) Gorget gets a free certificate from Let's Encrypt (recommended; ports 80 and 443 must reach this machine)")
+		fmt.Println("     2) A reverse proxy (Caddy, nginx, Traefik) in front handles HTTPS; Gorget listens on 127.0.0.1:8080")
+		fmt.Println("     3) Private or test setup: Gorget makes its own certificate authority (browsers warn until you trust it)")
+		if isIP {
+			fmt.Println("     (Let's Encrypt needs a domain name, so 1 is not available for an IP address.)")
+		}
+	}
 	def := "1"
 	if isIP {
 		def = "3"
-		fmt.Println("     (Let's Encrypt needs a domain name, so 1 is not available for an IP address.)")
 	}
 	mode := ""
 	for mode == "" {
-		switch ask(in, "     Choice", def) {
-		case "1":
+		choice := answer(*tlsF, "     Choice", def)
+		switch strings.ToLower(choice) {
+		case "1", "acme", "letsencrypt":
 			if isIP {
+				if scripted {
+					return errors.New("-tls acme needs a domain name; Let's Encrypt can't issue certificates for IP addresses (use -tls private)")
+				}
 				fmt.Println("     Let's Encrypt can't issue certificates for IP addresses; choose 2 or 3.")
 				continue
 			}
 			mode = config.TLSModeACME
-		case "2":
+		case "2", "proxy", "off":
 			mode = config.TLSModeOff
-		case "3":
+		case "3", "private", "internal-ca":
 			mode = config.TLSModeInternalCA
 		default:
+			if scripted {
+				return fmt.Errorf("-tls %q: use acme, proxy or private", choice)
+			}
 			fmt.Println("     Type 1, 2 or 3.")
 		}
 	}
 	email := ""
 	if mode == config.TLSModeACME {
-		email = ask(in, "     Email for certificate expiry notices (optional)", "")
+		email = answer(*emailF, "     Email for certificate expiry notices (optional)", "")
 	}
 
 	// 3. Database.
-	fmt.Println()
-	fmt.Println("3/5  Database: SQLite needs no setup and suits most networks. Use PostgreSQL for")
-	fmt.Println("     very large networks or to run several servers together.")
+	if !scripted {
+		fmt.Println()
+		fmt.Println("3/5  Database: SQLite needs no setup and suits most networks. Use PostgreSQL for")
+		fmt.Println("     very large networks or to run several servers together.")
+	}
 	dsn := ""
 	for {
-		dsn = ask(in, "     PostgreSQL URL (leave empty for SQLite)", "")
+		dsn = answer(*dbF, "     PostgreSQL URL (leave empty for SQLite)", "")
 		if dsn == "" || strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
 			break
+		}
+		if scripted {
+			return errors.New("-database-url should start with postgres://user:password@host/dbname")
 		}
 		fmt.Println("     It should start with postgres://user:password@host/dbname")
 	}
 
 	// 4. Gateway.
-	fmt.Println()
+	if !scripted {
+		fmt.Println()
+	}
 	gwDefault := "y"
 	if runtime.GOOS == "windows" {
 		gwDefault = "n"
-		fmt.Println("4/5  The gateway for standard WireGuard apps needs Linux or macOS; it stays off on Windows.")
+		if !scripted {
+			fmt.Println("4/5  The gateway for standard WireGuard apps needs Linux or macOS; it stays off on Windows.")
+		}
 	}
 	gateway := false
 	if runtime.GOOS != "windows" {
-		gateway = yes(ask(in, "4/5  Let standard WireGuard apps connect too (opens UDP 51820)? y/n", gwDefault))
+		gateway = yes(answer(*gatewayF, "4/5  Let standard WireGuard apps connect too (opens UDP 51820)? y/n", gwDefault))
 	}
 
 	// 5. Data directory.
-	fmt.Println()
-	dataDir := ask(in, "5/5  Where to keep data (database, keys, backups)", config.Default().DataDir)
+	if !scripted {
+		fmt.Println()
+	}
+	dataDir := answer(*dataF, "5/5  Where to keep data (database, keys, backups)", config.Default().DataDir)
 
 	// Build the file: only what differs from the defaults, so upgrades bring new defaults.
 	scheme := "https"
@@ -164,8 +213,8 @@ func cmdInit(args []string) error {
 	}
 	fmt.Println("Next steps:")
 	fmt.Printf("  1. Install and start the service:  %sgorget-server install -config %s\n", sudo(), *path)
-	fmt.Printf("  2. Open %s://%s/setup and finish in the browser. The setup link with its token is\n", scheme, host)
-	fmt.Println("     printed in the service log (" + logHint() + ").")
+	fmt.Println("     It prints your setup link when it is up; open it and create the owner account.")
+	fmt.Printf("     (Lost the link? Run: %sgorget-server setup-link)\n", sudo())
 	if mode == config.TLSModeOff {
 		fmt.Println("  Point your reverse proxy at http://127.0.0.1:8080 (examples in deploy/proxy: Caddyfile, nginx.conf).")
 	}
@@ -411,4 +460,56 @@ func serverAnswers(cfg config.Config) bool {
 	}
 	resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+// ---------- setup link ----------
+
+// setupLink returns the first-run link for this server, or "" once setup is finished.
+func setupLink(cfg config.Config) string {
+	b, err := os.ReadFile(filepath.Join(cfg.DataDir, "setup-token"))
+	if err != nil || strings.TrimSpace(string(b)) == "" {
+		return ""
+	}
+	return strings.TrimSuffix(cfg.PublicURL, "/") + "/setup#token=" + strings.TrimSpace(string(b))
+}
+
+// waitSetupLink waits for a freshly started service to write its setup token and prints the link.
+func waitSetupLink(cfg config.Config) {
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if link := setupLink(cfg); link != "" {
+			fmt.Println()
+			fmt.Println("Gorget is running. Finish setting it up in your browser:")
+			fmt.Println()
+			fmt.Println("  " + link)
+			fmt.Println()
+			fmt.Println("Create the owner account there. The link works until setup is done.")
+			if cfg.TLS.Mode == config.TLSModeACME {
+				fmt.Println("The first visit can take a few seconds while the HTTPS certificate is issued.")
+			}
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	fmt.Println("The service is starting but hasn't written its setup link yet. Check the log: " + logHint())
+	fmt.Println("Then run: gorget-server setup-link")
+}
+
+// cmdSetupLink prints the setup link again (it is also in the service log).
+func cmdSetupLink(args []string) error {
+	fs := flag.NewFlagSet("setup-link", flag.ExitOnError)
+	var cf commonFlags
+	cf.register(fs)
+	_ = fs.Parse(args)
+	cfg, err := cf.load()
+	if err != nil {
+		return err
+	}
+	if link := setupLink(cfg); link != "" {
+		fmt.Println(link)
+		return nil
+	}
+	fmt.Println("No setup is pending: the owner account already exists. Sign in at " + cfg.PublicURL)
+	fmt.Println("Locked out? Run: gorget-server reset-password -email you@example.com")
+	return nil
 }

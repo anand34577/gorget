@@ -30,6 +30,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started:
+      - Quick start: guide/quickstart.md
       - Install the server: guide/install-server.md
       - Install the apps: guide/install-clients.md
       - First steps: guide/first-steps.md
@@ -46,6 +47,7 @@ nav:
       - Files and SSH: guide/files-and-ssh.md
       - Post-quantum protection: guide/post-quantum.md
   - Running a server:
+      - Configuration reference: guide/configuration.md
       - HTTPS certificates: ops/tls.md
       - Single sign-on and SCIM: ops/sso.md
       - High availability (cluster): CLUSTER.md

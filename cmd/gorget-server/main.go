@@ -35,7 +35,8 @@ Usage:
   gorget-server [command] [flags]
 
 First time? Run:  gorget-server init     (asks a few questions, writes the config)
-           then:  gorget-server install  (installs and starts the service)
+           then:  gorget-server install  (installs, starts, and prints your setup link)
+No questions:     gorget-server init -yes -domain vpn.example.com
 
 Commands:
   init              Guided setup: write a configuration file and check this machine
@@ -43,7 +44,8 @@ Commands:
   serve             Run the server (default)
   install           Install as a system service (systemd / Windows service / launchd)
   uninstall         Remove the system service
-  start | stop      Start or stop the installed service
+  start | stop | restart   Control the installed service
+  setup-link        Print the first-run setup link again
   backup            Write an encrypted backup:     backup -out file.gbk
   restore           Restore into an empty database: restore -in file.gbk
   migrate-db        Copy all data to another database: migrate-db -to postgres://...
@@ -253,12 +255,14 @@ func cmdServe(args []string) error {
 }
 
 func cmdService(action string, args []string) error {
+	var cfg config.Config
 	if action == "install" {
 		fs := flag.NewFlagSet("install", flag.ExitOnError)
 		var cf commonFlags
 		cf.register(fs)
 		_ = fs.Parse(args)
-		if _, err := cf.load(); err != nil {
+		var err error
+		if cfg, err = cf.load(); err != nil {
 			return fmt.Errorf("configuration is invalid, fix it before installing: %w", err)
 		}
 	}
@@ -282,7 +286,7 @@ func cmdService(action string, args []string) error {
 			fmt.Fprintln(os.Stderr, "check the log: "+logHint())
 			return nil
 		}
-		fmt.Println("service started. Open the setup link printed in the log: " + logHint())
+		waitSetupLink(cfg)
 	}
 	return nil
 }

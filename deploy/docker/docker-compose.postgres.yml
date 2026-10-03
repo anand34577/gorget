@@ -1,16 +1,18 @@
-# Gorget with PostgreSQL (recommended for large networks). Run with:
-#   POSTGRES_PASSWORD=$(openssl rand -hex 24) docker compose -f docker-compose.postgres.yml up -d
+# Gorget with PostgreSQL (for large networks or several servers). Same steps as docker-compose.yml:
+# copy .env.example to .env, set GORGET_DOMAIN and POSTGRES_PASSWORD (openssl rand -hex 24), then
+#   docker compose -f docker-compose.postgres.yml up -d
+#   docker compose -f docker-compose.postgres.yml exec gorget gorget-server setup-link
 services:
   gorget:
-    image: ghcr.io/anand34577/gorget:latest
+    image: ghcr.io/anand34577/gorget:${GORGET_VERSION:-latest}
     build: ../..
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      GORGET_PUBLIC_URL: https://vpn.example.com
-      GORGET_TLS_EMAIL: admin@example.com
+      GORGET_PUBLIC_URL: https://${GORGET_DOMAIN:?Set GORGET_DOMAIN in the .env file, e.g. GORGET_DOMAIN=vpn.example.com}
+      GORGET_TLS_EMAIL: ${GORGET_EMAIL:-}
       GORGET_DB_DRIVER: postgres
       GORGET_DB_DSN: postgres://gorget:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/gorget?sslmode=disable
     ports: ["80:80/tcp", "443:443/tcp", "443:443/udp", "3478:3478/udp", "3479:3479/udp", "51820:51820/udp"]
@@ -30,7 +32,7 @@ services:
     environment:
       POSTGRES_USER: gorget
       POSTGRES_DB: gorget
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}
     volumes: [pg-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gorget"]

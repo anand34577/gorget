@@ -20,7 +20,7 @@ jobs:
       - run: (cd terraform-provider-gorget && go vet ./...)
       - run: GOOS=windows go build ./... && GOOS=darwin go build ./client/... ./cmd/gorget
       - run: sh scripts/repro-check.sh
-      - run: shellcheck -S error -s sh install.sh scripts/repro-check.sh packaging/linux/postinst.sh packaging/linux/prerm.sh
+      - run: shellcheck -S error -s sh install.sh install-server.sh scripts/repro-check.sh packaging/linux/postinst.sh packaging/linux/prerm.sh
       - name: Fuzz smoke (30s each)
         run: |
           go test ./internal/policy -run '^$' -fuzz 'FuzzParse$' -fuzztime 30s

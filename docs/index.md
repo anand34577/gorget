@@ -14,9 +14,21 @@ A self-hosted, open-source WireGuard® mesh VPN. You run the server; nothing eve
 
 ## Where to start
 
-1. [Install the server](guide/install-server.md): Docker, a binary, or [Kubernetes](ops/kubernetes.md).
-2. [Install the apps](guide/install-clients.md) on your computers and phones.
-3. Take the [first steps](guide/first-steps.md): add devices, then tighten the [access rules](guide/access-rules.md).
+**New here?** Follow the [Quick start](guide/quickstart.md): a server, a domain name, one command, and two connected devices in about 15 minutes.
+
+| I want to… | Go to |
+|---|---|
+| Set up a server | [Install the server](guide/install-server.md): installer script, Docker, reverse proxy, Kubernetes |
+| Connect a laptop, phone, server or router | [Install the apps](guide/install-clients.md) |
+| Reach my home network and VLANs from anywhere | [Your home network, from anywhere](guide/homelab.md) |
+| Decide who can reach what | [Access rules](guide/access-rules.md) |
+| Change a setting | [Configuration reference](guide/configuration.md) |
+| Fix a problem | [Troubleshooting](ops/troubleshooting.md) |
+| Upgrade, back up or move the server | [Backups and upgrades](ops/backups.md) |
+| Automate it | [REST API](ops/api.md), [Terraform](ops/terraform.md) |
+
+Not sure it is for you? Gorget is for people who want to run their own private network (like Tailscale or NetBird)
+without handing it to anyone else. You need a machine with a public address and a domain name; everything else is included.
 
 ## Apps
 

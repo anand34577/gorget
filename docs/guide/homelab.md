@@ -17,20 +17,16 @@ relays traffic when a direct path is impossible.
 
 ## 1. The server on your VPS
 
-Point a DNS name at the VPS (for example `vpn.example.com`), open TCP 80 and 443 and
-UDP 3478 and 3479 in the VPS firewall. Download `gorget-server_<version>_linux_amd64` from
-the [latest release](https://github.com/anand34577/gorget/releases/latest) (or use the
-Docker image, see [Install the server](install-server.md)), then:
+Point a DNS name at the VPS (for example `vpn.example.com`) and open TCP 80 and 443 and
+UDP 443, 3478, 3479 and 51820 in the VPS firewall. Then, on the VPS:
 
 ```sh
-sudo install -m 755 gorget-server_*_linux_amd64 /usr/local/bin/gorget-server
-sudo gorget-server init      # answers: vpn.example.com, Let's Encrypt, SQLite
-sudo gorget-server install   # starts the service
-sudo journalctl -u gorget-server | grep -A3 setup   # the setup link
+curl -fsSL https://raw.githubusercontent.com/anand34577/gorget/main/install-server.sh | sh -s -- --domain vpn.example.com
 ```
 
-Open the link, create your owner account, and turn on two-factor sign-in under
-**Account & security** straight away.
+It prints a setup link. Open it, create your owner account, and turn on two-factor sign-in
+under **Account & security** straight away. (Other ways to install, such as Docker, are in
+[Install the server](install-server.md).)
 
 ## 2. Let one machine at home share the home networks
 
