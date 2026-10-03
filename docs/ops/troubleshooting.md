@@ -41,6 +41,9 @@ gorget netcheck              # on a device: how it reaches the network
 
 | Symptom | Check |
 |---|---|
+| **A Gorget device can ping others but they can't ping it** (typically a Windows laptop) | Windows Defender Firewall blocks unsolicited inbound traffic, including ping, on a new network adapter. Gorget 0.5 adds a firewall rule that allows traffic from the VPN's own addresses on the Gorget adapter only: update the app on that computer. On Linux, a host firewall such as `ufw` can do the same: `sudo ufw allow in on gorget0`. |
+| A WireGuard app connects but only the internet works | The app is probably in "All traffic" mode and the device it should reach blocks inbound traffic (see the row above), or the access rules don't allow it (**Devices → the device → Access**, or the simulator under **Access rules**). New apps default to "Private network only"; change an existing one under **WireGuard apps → Edit**, then import the new configuration. |
+| The console shows a device as offline for a while after it went away, or online late | Gorget apps are detected as soon as their connection drops; a device that vanished without closing it (a phone leaving Wi-Fi, a sleeping laptop) is noticed within about half a minute. WireGuard apps count as online while the gateway keeps hearing from them (a few seconds after turning the tunnel on, about a minute and a quarter after turning it off). |
 | Devices only connect through the relay | `gorget netcheck`. UDP may be blocked on one side; the relay works but is slower. Open UDP 3478/3479 on the server; hard NATs on both sides need the relay. |
 | Can reach a device by IP but not by name | Is **Use Gorget DNS** on? On Linux without systemd-resolved only the DNS override works. |
 | A device can't reach another | **Devices → (device) → Access** shows exactly what the rules allow. Use the simulator under **Access rules**. |

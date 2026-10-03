@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { ApiError, errMessage, get, post, put } from "@/lib/api";
 import type { Device, Group, Policy, PolicyAnalysis, PolicyRule, PolicyVersion, UserView } from "@/lib/types";
 import { useSession } from "@/lib/session";
-import { cn, relTime } from "@/lib/utils";
+import { cn, relTime, useUnsavedGuard } from "@/lib/utils";
+import { SuggestInput, type Suggestion } from "@/components/suggest";
 import {
   Badge,
   Button,
@@ -60,6 +61,8 @@ export default function AccessRules() {
     return () => clearTimeout(timer.current);
   }, [doc]);
 
+  const dirtyNow = !!current.data && doc !== null && doc !== current.data.document;
+  useUnsavedGuard(dirtyNow);
   if (!current.data || doc === null) return <Skeleton className="h-96" />;
   const dirty = doc !== current.data.document;
   const policy = analysis?.parsed;
@@ -291,14 +294,22 @@ function VisualRules({ policy, onChange, readOnly }: { policy: Policy; onChange:
           <Plus /> Add rule
         </Button>
       )}
-      {editing && <RuleDialog rule={editing.rule} onClose={() => setEditing(null)} onSave={(r) => (update(editing.index, r), setEditing(null))} />}
+      {editing && <RuleDialog rule={editing.rule} hosts={Object.keys(policy.hosts ?? {})} onClose={() => setEditing(null)} onSave={(r) => (update(editing.index, r), setEditing(null))} />}
     </div>
   );
 }
 
-function RuleDialog({ rule, onClose, onSave }: { rule: PolicyRule; onClose: () => void; onSave: (r: PolicyRule) => void }) {
+function RuleDialog({ rule, hosts, onClose, onSave }: { rule: PolicyRule; hosts: string[]; onClose: () => void; onSave: (r: PolicyRule) => void }) {
   const groups = useSelectorOptions();
   const [r, setR] = useState<PolicyRule>(rule);
+  const labels: Record<string, string> = { "*": "Anyone / anything", "autogroup:member": "All members' devices", "autogroup:self": "Their own devices", "autogroup:internet": "The internet (exit nodes)" };
+  const toSuggestions = (extra: string[] = []): Suggestion[] => [
+    ...extra.map((o) => ({ value: o, label: labels[o], group: "Special" })),
+    ...groups.flatMap((g) => g.options.map((o) => ({ value: o, label: labels[o], group: g.label }))),
+    ...hosts.map((h) => ({ value: h, group: "Named hosts" })),
+  ];
+  const srcSuggestions = useMemo(() => toSuggestions(), [groups, hosts]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dstSuggestions = useMemo(() => toSuggestions(["autogroup:self", "autogroup:internet"]), [groups, hosts]); // eslint-disable-line react-hooks/exhaustive-deps
   const [dstSel, setDstSel] = useState("");
   const [ports, setPorts] = useState("*");
   const addDst = () => {
@@ -308,27 +319,6 @@ function RuleDialog({ rule, onClose, onSave }: { rule: PolicyRule; onClose: () =
     setDstSel("");
     setPorts("*");
   };
-  const picker = (value: string, onPick: (v: string) => void, extra: string[] = []) => (
-    <Select value={value} onChange={(e) => onPick(e.target.value)}>
-      <option value="">Choose…</option>
-      {extra.length > 0 && (
-        <optgroup label="Special">
-          {extra.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </optgroup>
-      )}
-      {groups.map((g) =>
-        g.options.length ? (
-          <optgroup key={g.label} label={g.label}>
-            {g.options.map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </optgroup>
-        ) : null,
-      )}
-    </Select>
-  );
   return (
     <Dialog
       open
@@ -353,22 +343,21 @@ function RuleDialog({ rule, onClose, onSave }: { rule: PolicyRule; onClose: () =
             <Input className="font-mono" value={r.id ?? ""} placeholder="eng-ssh" onChange={(e) => setR({ ...r, id: e.target.value })} />
           </Field>
         </div>
-        <Field label="Who (sources)">
-          <div className="space-y-2">
-            {picker("", (v) => v && !r.src.includes(v) && setR({ ...r, src: [...r.src, v] }))}
-            <ListEditor values={r.src} onChange={(v) => setR({ ...r, src: v })} placeholder="or type: 10.0.0.0/8, user@example.com…" />
-          </div>
+        <Field label="Who (sources)" hint="Start typing a person, group, tag, device or address, or pick from the list.">
+          <ListEditor values={r.src} onChange={(v) => setR({ ...r, src: v })} placeholder="Everyone, a group, a person, a device…" suggestions={srcSuggestions} />
         </Field>
         <Field label="Can reach (destinations)" hint="Ports: * for all, or a list like 22,80,443 or a range 8000-8100.">
           <div className="space-y-2">
             <div className="flex gap-2">
-              <div className="flex-1">{picker(dstSel, setDstSel, ["autogroup:self", "autogroup:internet"])}</div>
-              <Input className="w-36 font-mono" value={ports} onChange={(e) => setPorts(e.target.value)} aria-label="Ports" />
-              <Button onClick={addDst} disabled={!dstSel}>
+              <div className="flex-1">
+                <SuggestInput value={dstSel} onChange={setDstSel} onPick={setDstSel} onEnter={addDst} suggestions={dstSuggestions} placeholder="A device, group, tag or network (192.168.1.0/24)" aria-label="Destination" mono />
+              </div>
+              <Input className="w-36 font-mono" value={ports} onChange={(e) => setPorts(e.target.value)} aria-label="Ports" placeholder="22,443 or *" />
+              <Button onClick={addDst} disabled={!dstSel.trim()}>
                 Add
               </Button>
             </div>
-            <ListEditor values={r.dst} onChange={(v) => setR({ ...r, dst: v })} placeholder="or type: 192.168.1.0/24:445" />
+            <ListEditor values={r.dst} onChange={(v) => setR({ ...r, dst: v })} placeholder="or type a full entry: 192.168.1.0/24:445" />
           </div>
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">

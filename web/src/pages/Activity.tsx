@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Download, Search, ShieldCheck, ShieldX } from "lucide-react";
+import { Download, ShieldCheck, ShieldX } from "lucide-react";
 import { get } from "@/lib/api";
 import type { AuditEntry } from "@/lib/types";
 import { useSession } from "@/lib/session";
-import { fmtDate, relTime } from "@/lib/utils";
-import { Badge, Button, EmptyState, Input, Mono, PageHeader, Panel, Select, Skeleton, Tip } from "@/components/ui";
+import { fmtDate } from "@/lib/utils";
+import { Ago, SearchInput, useDebounced } from "@/components/data";
+import { Badge, Button, EmptyState, Mono, PageHeader, Panel, Select, Skeleton, Tip } from "@/components/ui";
 import { describeAction } from "./Overview";
 
 const categories = [
@@ -23,17 +24,18 @@ const categories = [
 export function ActivityLog() {
   const { isAdmin } = useSession();
   const [q, setQ] = useState("");
+  const dq = useDebounced(q, 300); // one request when typing stops, not one per key
   const [cat, setCat] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const qs = (before?: number) => {
     const p = new URLSearchParams({ limit: "50" });
-    if (q) p.set("q", q);
+    if (dq) p.set("q", dq);
     if (cat) p.set("action", cat);
     if (before) p.set("before", String(before));
     return p.toString();
   };
   const list = useInfiniteQuery({
-    queryKey: ["audit", q, cat],
+    queryKey: ["audit", dq, cat],
     queryFn: ({ pageParam }) => get<AuditEntry[]>(`/audit?${qs(pageParam)}`),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.length === 50 ? last[last.length - 1].seq : undefined),
@@ -72,10 +74,7 @@ export function ActivityLog() {
       />
       <Panel>
         <div className="flex flex-wrap gap-3 border-b border-line px-4 py-3">
-          <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-3" />
-            <Input placeholder="Search people, devices, actions" className="pl-8" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
+          <SearchInput value={q} onChange={setQ} placeholder="Search people, devices, actions" />
           <Select className="w-44" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category">
             {categories.map((c) => (
               <option key={c.v} value={c.v}>
@@ -90,7 +89,7 @@ export function ActivityLog() {
             <Skeleton className="h-8" />
           </div>
         ) : !entries.length ? (
-          <EmptyState title="No activity matches" />
+          <EmptyState title="No activity matches" action={q || cat ? <Button onClick={() => (setQ(""), setCat(""))}>Clear search and filters</Button> : undefined} />
         ) : (
           <ul className="divide-y divide-line">
             {entries.map((e) => {
@@ -105,7 +104,7 @@ export function ActivityLog() {
                 <li key={e.seq}>
                   <button className="flex w-full items-center gap-3 px-5 py-2.5 text-left text-[13px] hover:bg-surface-2" onClick={() => setOpen(open === e.seq ? null : e.seq)} aria-expanded={open === e.seq}>
                     <Tip content={fmtDate(e.ts)}>
-                      <span className="w-28 shrink-0 text-xs text-ink-3">{relTime(e.ts)}</span>
+                      <span className="w-28 shrink-0 text-xs text-ink-3"><Ago ts={e.ts} /></span>
                     </Tip>
                     <span className="min-w-0 flex-1 truncate">
                       <span className="font-medium">{e.actor || "system"}</span> <span className="text-ink-2">{describeAction(e.action)}</span>{" "}

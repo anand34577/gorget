@@ -30,6 +30,8 @@ export interface Me {
   features: { user_wg_configs: boolean; user_setup_keys: boolean; gateway: boolean };
   version: string;
   public_url: string;
+  /** Routing preselected when adding a WireGuard app ("split" or "full"). */
+  wg_tunnel_mode?: string;
 }
 
 export interface Route {
@@ -238,6 +240,7 @@ export interface Settings {
   gateway: { exit_node: boolean; default_tunnel_mode: string; split_routes: string[] | null; default_expiry_days: number; persistent_keepalive: number };
   posture: Posture;
   routing: { domain_routes: DomainRoute[] | null };
+  notifications?: NotificationSettings;
 }
 
 export interface Posture {
@@ -299,8 +302,50 @@ export interface EmailNotify {
   access_requests: boolean;
   route_advertised: boolean;
   login_lockout: boolean;
+  device_offline: boolean;
+  device_online: boolean;
   owners_too: boolean;
   invitations: boolean;
+}
+
+export interface GotifySettings {
+  enabled: boolean;
+  url: string;
+  token_set: boolean;
+  priority: number;
+  skip_verify: boolean;
+}
+
+export interface NtfySettings {
+  enabled: boolean;
+  url: string;
+  topic: string;
+  token_set: boolean;
+  priority: number;
+  skip_verify: boolean;
+}
+
+export interface LoginAlerts {
+  mode: "off" | "new" | "all";
+  to_user: boolean;
+  to_admins: boolean;
+  to_push: boolean;
+}
+
+export interface NotificationSettings {
+  gotify: GotifySettings;
+  ntfy: NtfySettings;
+  events: EmailNotify;
+  login: LoginAlerts;
+}
+
+export interface PushStatus {
+  sent: number;
+  failed: number;
+  last_sent: number;
+  last_error: string;
+  last_error_at: number;
+  queued: number;
 }
 
 export interface EmailSettings {

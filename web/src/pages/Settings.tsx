@@ -27,10 +27,6 @@ import {
   Select,
   Skeleton,
   Table,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   Td,
   Th,
   ToggleRow,
@@ -38,6 +34,7 @@ import {
 import { useReauth } from "./Account";
 import { ClusterCard, HealthTab, ProvisioningTab, RoutingTab } from "./SettingsExtra";
 import { EmailTab } from "./SettingsEmail";
+import { NotificationsTab } from "./SettingsNotifications";
 
 type Section = keyof Settings;
 
@@ -85,67 +82,104 @@ export function SaveBar({ dirty, busy, save, err }: { dirty: boolean; busy: bool
   );
 }
 
+const sections: { label: string; items: [string, string][] }[] = [
+  {
+    label: "Network",
+    items: [
+      ["network", "Addresses & names"],
+      ["devices", "Devices"],
+      ["health", "Device health"],
+      ["routing", "Domain routing"],
+    ],
+  },
+  {
+    label: "Apps & gateway",
+    items: [
+      ["clients", "Gorget apps"],
+      ["gateway", "WireGuard gateway"],
+    ],
+  },
+  {
+    label: "Security",
+    items: [
+      ["signin", "Sign-in"],
+      ["sso", "Single sign-on"],
+      ["provisioning", "Provisioning"],
+    ],
+  },
+  {
+    label: "Notifications",
+    items: [
+      ["notifications", "Alerts, Gotify & ntfy"],
+      ["email", "Email"],
+      ["webhooks", "Webhooks"],
+    ],
+  },
+  { label: "Server", items: [["system", "Status"]] },
+];
+
 export function SettingsPage() {
   const [params, setParams] = useSearchParams();
   const { can } = useSession();
   const { data } = useSettings();
   const tab = params.get("tab") ?? "network";
   if (!data) return <Skeleton className="h-96" />;
+  const go = (t: string) => setParams({ tab: t }, { replace: true });
+  const all = sections.flatMap((s) => s.items);
   return (
     <>
       <PageHeader title="Settings" description={`${data.server.public_url} · ${data.server.database} database · version ${data.server.version}`} />
-      <Tabs value={tab} onValueChange={(t) => setParams({ tab: t })}>
-        <TabsList>
-          <TabsTrigger value="network">Network</TabsTrigger>
-          <TabsTrigger value="devices">Devices</TabsTrigger>
-          <TabsTrigger value="health">Device health</TabsTrigger>
-          <TabsTrigger value="routing">Routing</TabsTrigger>
-          <TabsTrigger value="clients">Gorget apps</TabsTrigger>
-          <TabsTrigger value="gateway">Gateway</TabsTrigger>
-          <TabsTrigger value="signin">Sign-in</TabsTrigger>
-          <TabsTrigger value="sso">Single sign-on</TabsTrigger>
-          <TabsTrigger value="provisioning">Provisioning</TabsTrigger>
-          <TabsTrigger value="email">Email</TabsTrigger>
-          <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
-        </TabsList>
-        <TabsContent value="network">
-          <NetworkTab data={data} />
-        </TabsContent>
-        <TabsContent value="devices">
-          <DevicesTab data={data} />
-        </TabsContent>
-        <TabsContent value="health">
-          <HealthTab data={data} />
-        </TabsContent>
-        <TabsContent value="routing">
-          <RoutingTab data={data} />
-        </TabsContent>
-        <TabsContent value="clients">
-          <ClientsTab data={data} />
-        </TabsContent>
-        <TabsContent value="gateway">
-          <GatewayTab data={data} />
-        </TabsContent>
-        <TabsContent value="signin">
-          <SignInTab data={data} canEdit={can("manage_sys")} />
-        </TabsContent>
-        <TabsContent value="sso">
-          <SSOTab />
-        </TabsContent>
-        <TabsContent value="provisioning">
-          <ProvisioningTab />
-        </TabsContent>
-        <TabsContent value="email">
-          <EmailTab />
-        </TabsContent>
-        <TabsContent value="webhooks">
-          <WebhooksTab />
-        </TabsContent>
-        <TabsContent value="system">
-          <SystemTab />
-        </TabsContent>
-      </Tabs>
+      <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">
+        <div className="lg:hidden">
+          <Select value={tab} onChange={(e) => go(e.target.value)} aria-label="Settings section">
+            {sections.map((sec) => (
+              <optgroup key={sec.label} label={sec.label}>
+                {sec.items.map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+        </div>
+        <nav aria-label="Settings sections" className="sticky top-4 hidden h-fit space-y-5 lg:block">
+          {sections.map((sec) => (
+            <div key={sec.label}>
+              <div className="mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-ink-3">{sec.label}</div>
+              <ul className="space-y-0.5">
+                {sec.items.map(([id, label]) => (
+                  <li key={id}>
+                    <button
+                      onClick={() => go(id)}
+                      aria-current={tab === id ? "page" : undefined}
+                      className={"w-full rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium transition-colors " + (tab === id ? "bg-surface text-ink shadow-sm" : "text-ink-2 hover:bg-sunken hover:text-ink")}
+                    >
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+        <div className="min-w-0">
+          <h2 className="mb-4 font-display text-xl font-semibold">{all.find(([id]) => id === tab)?.[1] ?? "Settings"}</h2>
+          {tab === "network" && <NetworkTab data={data} />}
+          {tab === "devices" && <DevicesTab data={data} />}
+          {tab === "health" && <HealthTab data={data} />}
+          {tab === "routing" && <RoutingTab data={data} />}
+          {tab === "clients" && <ClientsTab data={data} />}
+          {tab === "gateway" && <GatewayTab data={data} />}
+          {tab === "signin" && <SignInTab data={data} canEdit={can("manage_sys")} />}
+          {tab === "sso" && <SSOTab />}
+          {tab === "provisioning" && <ProvisioningTab />}
+          {tab === "notifications" && <NotificationsTab />}
+          {tab === "email" && <EmailTab />}
+          {tab === "webhooks" && <WebhooksTab />}
+          {tab === "system" && <SystemTab />}
+        </div>
+      </div>
     </>
   );
 }
@@ -441,8 +475,8 @@ function GatewayTab({ data }: { data: SettingsResponse }) {
       <div className="grid gap-4 border-t border-line px-5 py-4 md:grid-cols-3">
         <Field label="Default routing for new apps">
           <Select value={d.default_tunnel_mode} onChange={(e) => s.setDraft({ ...d, default_tunnel_mode: e.target.value })}>
+            <option value="split">Private network only (recommended)</option>
             <option value="full">All traffic</option>
-            <option value="split">Private network only</option>
           </Select>
         </Field>
         <Field label="New apps stop working after (days)" hint="0 = no limit.">

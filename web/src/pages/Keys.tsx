@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, KeyRound, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { del, errMessage, get, post } from "@/lib/api";
-import type { SetupKey } from "@/lib/types";
+import type { Device, SetupKey } from "@/lib/types";
 import { useSession } from "@/lib/session";
-import { fmtDate, relTime } from "@/lib/utils";
+import { fmtDate } from "@/lib/utils";
+import { Ago, matchesQuery, Pagination, SearchInput, SortTh, useDebounced, useTable, useTick } from "@/components/data";
 import { Badge, Button, Checkbox, confirmAction, Dialog, EmptyState, ErrorNote, Field, Input, ListEditor, Mono, Note, PageHeader, Panel, SecretBox, Select, Table, Tag, Td, Th } from "@/components/ui";
 
 function status(k: SetupKey): { label: string; tone: "ok" | "danger" | "neutral" } {
@@ -23,7 +24,25 @@ export function SetupKeys() {
   const keys = useQuery({ queryKey: ["setup-keys"], queryFn: () => get<SetupKey[]>("/setup-keys") });
   const [open, setOpen] = useState(params.get("new") === "1");
   const [created, setCreated] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const dq = useDebounced(q, 200);
+  const [show, setShow] = useState<"all" | "active" | "inactive">("all");
+  useTick();
   const allowed = can("manage_net") || me.features.user_setup_keys;
+  const list = useMemo(
+    () => (keys.data ?? []).filter((k) => (show === "all" || (show === "active") === (status(k).label === "Active")) && matchesQuery(dq, k.name, k.key_prefix, k.tags, k.created_by)),
+    [keys.data, dq, show],
+  );
+  const table = useTable(list, {
+    defaultSort: { key: "created", dir: "asc" },
+    sorters: {
+      name: (a, b) => a.name.localeCompare(b.name),
+      created: (a, b) => b.created_at - a.created_at,
+      used: (a, b) => b.uses - a.uses,
+      expires: (a, b) => (a.expires_at || Infinity) - (b.expires_at || Infinity),
+      status: (a, b) => status(a).label.localeCompare(status(b).label),
+    },
+  });
 
   useEffect(() => {
     if (params.get("new") === "1") setOpen(true);
@@ -53,25 +72,47 @@ export function SetupKeys() {
         }
       />
       <Panel>
-        {!keys.data?.length ? (
+        {!!keys.data?.length && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+            <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="group" aria-label="Filter keys">
+              {(["all", "active", "inactive"] as const).map((f) => (
+                <button key={f} aria-pressed={show === f} onClick={() => setShow(f)} className={"rounded px-2.5 py-1 text-xs font-medium capitalize " + (show === f ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink")}>
+                  {f}
+                </button>
+              ))}
+            </div>
+            <SearchInput value={q} onChange={setQ} placeholder="Name, tag or key prefix" label="Search setup keys" className="ml-auto" />
+          </div>
+        )}
+        {keys.isLoading ? (
+          <div className="space-y-2 p-4">
+            <div className="h-10 animate-pulse rounded bg-sunken" />
+            <div className="h-10 animate-pulse rounded bg-sunken" />
+          </div>
+        ) : !keys.data?.length ? (
           <EmptyState icon={<KeyRound />} title="No setup keys">
             Create one, then run <span className="font-mono">gorget up --setup-key …</span> on the machine.
           </EmptyState>
+        ) : list.length === 0 ? (
+          <EmptyState icon={<KeyRound />} title="No keys match" action={<Button onClick={() => (setQ(""), setShow("all"))}>Clear search and filters</Button>}>
+            Try another name or filter.
+          </EmptyState>
         ) : (
+          <>
           <Table>
             <thead>
               <tr>
-                <Th>Name</Th>
+                <SortTh label="Name" sortKey="name" table={table} />
                 <Th>Key</Th>
                 <Th className="hidden md:table-cell">Type</Th>
-                <Th className="hidden md:table-cell">Used</Th>
-                <Th className="hidden lg:table-cell">Expires</Th>
-                <Th>Status</Th>
+                <SortTh label="Used" sortKey="used" table={table} className="hidden md:table-cell" />
+                <SortTh label="Expires" sortKey="expires" table={table} className="hidden lg:table-cell" />
+                <SortTh label="Status" sortKey="status" table={table} />
                 <Th className="w-20" />
               </tr>
             </thead>
             <tbody>
-              {keys.data.map((k) => {
+              {table.rows.map((k) => {
                 const s = status(k);
                 return (
                   <tr key={k.id} className="hover:bg-surface-2">
@@ -95,7 +136,7 @@ export function SetupKeys() {
                     </Td>
                     <Td className="hidden md:table-cell text-ink-2">
                       {k.uses}
-                      {k.max_uses ? ` / ${k.max_uses}` : ""} {k.last_used_at > 0 && <span className="text-xs text-ink-3">· {relTime(k.last_used_at)}</span>}
+                      {k.max_uses ? ` / ${k.max_uses}` : ""} {k.last_used_at > 0 && <span className="text-xs text-ink-3">· <Ago ts={k.last_used_at} /></span>}
                     </Td>
                     <Td className="hidden lg:table-cell text-ink-2">{k.expires_at ? fmtDate(k.expires_at) : "Never"}</Td>
                     <Td>
@@ -123,6 +164,8 @@ export function SetupKeys() {
               })}
             </tbody>
           </Table>
+          <Pagination table={table} noun="keys" />
+          </>
         )}
       </Panel>
       <CreateKey
@@ -141,10 +184,16 @@ export function SetupKeys() {
           <div className="space-y-4">
             <SecretBox value={created} />
             <div>
-              <div className="mb-1 text-[13px] font-medium">Join a Linux server</div>
-              <pre className="overflow-x-auto rounded-md bg-sunken p-3 font-mono text-[12px]">
-                gorget up --server {me.public_url} --setup-key {created}
-              </pre>
+              <div className="mb-1 text-[13px] font-medium">Linux or Mac: install and join in one step</div>
+              <pre className="overflow-x-auto rounded-md bg-sunken p-3 font-mono text-[12px]">curl -fsSL {me.public_url}/install.sh | GORGET_SETUP_KEY={created} sh</pre>
+            </div>
+            <div>
+              <div className="mb-1 text-[13px] font-medium">Windows (PowerShell)</div>
+              <pre className="overflow-x-auto rounded-md bg-sunken p-3 font-mono text-[12px]">$env:GORGET_SETUP_KEY='{created}'; irm {me.public_url}/install.ps1 | iex</pre>
+            </div>
+            <div>
+              <div className="mb-1 text-[13px] font-medium">Already installed</div>
+              <pre className="overflow-x-auto rounded-md bg-sunken p-3 font-mono text-[12px]">gorget up -server {me.public_url.replace(/^https?:\/\//, "")} -setup-key {created}</pre>
             </div>
           </div>
         )}
@@ -165,6 +214,9 @@ function CreateKey({ open, onOpenChange, onCreated }: { open: boolean; onOpenCha
   const [maxUses, setMaxUses] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const devs = useQuery({ queryKey: ["devices"], queryFn: () => get<Device[]>("/devices"), enabled: open });
+  const keysQ = useQuery({ queryKey: ["setup-keys"], queryFn: () => get<SetupKey[]>("/setup-keys"), enabled: open });
+  const knownTags = useMemo(() => [...new Set([...(devs.data ?? []).flatMap((d) => d.tags), ...(keysQ.data ?? []).flatMap((k) => k.tags), "tag:server", "tag:router"])].sort(), [devs.data, keysQ.data]);
   return (
     <Dialog
       open={open}
@@ -212,7 +264,7 @@ function CreateKey({ open, onOpenChange, onCreated }: { open: boolean; onOpenCha
           <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Tags" hint={admin ? "Devices joined with this key get these tags." : "You can only use tags you own (see tagOwners in the access rules)."}>
-          <ListEditor values={tags} onChange={setTags} placeholder="tag:server" />
+          <ListEditor values={tags} onChange={setTags} placeholder="tag:server" suggestions={knownTags} validate={(v) => (/^tag:[a-z0-9][a-z0-9-]*$/.test(v) ? null : "A tag looks like tag:server (lowercase letters, digits and dashes)")} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Key expires after">

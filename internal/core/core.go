@@ -57,10 +57,16 @@ type Core struct {
 	Geo        *geoip.DB
 	mailq      chan mailer.Message
 	mailStatus mailStatus
+	push       pushStatus
+	pushq      chan pushMsg
+	offMu      sync.Mutex
+	offSent    map[string]bool // devices whose absence was announced
+	wg         *wgPresence
+	login      *loginHistory
 }
 
 func New(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, log *slog.Logger) (*Core, error) {
-	c := &Core{Cfg: cfg, Store: st, Box: box, Log: log, Bus: NewBus(), mailq: make(chan mailer.Message, 500)}
+	c := &Core{Cfg: cfg, Store: st, Box: box, Log: log, Bus: NewBus(), mailq: make(chan mailer.Message, 500), wg: newWGPresence(), login: newLoginHistory(), pushq: make(chan pushMsg, 200), offSent: map[string]bool{}}
 	c.Geo = geoip.Open(filepath.Join(cfg.DataDir, "geoip"))
 	c.Coord = newCoordinator(c)
 	if err := c.loadSettings(ctx); err != nil {
@@ -103,6 +109,8 @@ func (c *Core) Run(ctx context.Context) {
 	go c.runWebhooks(ctx)
 	go c.runMail(ctx)
 	go c.runNotifier(ctx)
+	go c.runPush(ctx)
+	go c.runWGPresence(ctx)
 	go c.runStats(ctx)
 	go c.runGeoUpdates(ctx)
 }

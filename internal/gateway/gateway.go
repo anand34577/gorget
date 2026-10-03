@@ -63,10 +63,13 @@ type Gateway struct {
 	}
 	lastRules string
 	known     map[string]bool // public keys currently configured
+	// Per standard client: receive counter at the last sample, and when it last changed or a DB write happened.
+	rx      map[string]int64
+	touched map[string]time.Time
 }
 
 func New(c *core.Core, log *slog.Logger) *Gateway {
-	g := &Gateway{cfg: c.Cfg.Gateway, core: c, log: log, dns: dnsserver.New(log), known: map[string]bool{}}
+	g := &Gateway{cfg: c.Cfg.Gateway, core: c, log: log, dns: dnsserver.New(log), known: map[string]bool{}, rx: map[string]int64{}, touched: map[string]time.Time{}}
 	g.status = Status{Enabled: g.cfg.Enabled, Interface: g.cfg.Interface, Endpoint: g.cfg.Endpoint, PublicKey: c.GatewayPublicKey().String()}
 	return g
 }
@@ -106,7 +109,7 @@ func (g *Gateway) Run(ctx context.Context) {
 		}
 	}()
 	snaps := g.core.Coord.Subscribe()
-	stats := time.NewTicker(30 * time.Second)
+	stats := time.NewTicker(5 * time.Second) // fast enough that the console notices a client within seconds
 	defer stats.Stop()
 	for {
 		select {
@@ -242,7 +245,9 @@ func (g *Gateway) apply(s *core.Snapshot) error {
 	return nil
 }
 
-// collectStats records handshakes and transfer counters of standard WireGuard peers.
+// collectStats samples the standard WireGuard peers. A client counts as active when its
+// receive counter moved since the last sample or it just completed a handshake; that is
+// reported to the core right away, while the database is only updated about twice a minute.
 func (g *Gateway) collectStats(ctx context.Context) {
 	peers, err := g.dp.Peers()
 	if err != nil {
@@ -255,11 +260,26 @@ func (g *Gateway) collectStats(ctx context.Context) {
 			byKey[d.WGPublicKey] = d
 		}
 	}
+	now := time.Now()
 	for _, p := range peers {
-		d := byKey[p.PublicKey.String()]
-		if d == nil || p.LastHandshakeTime.IsZero() {
+		key := p.PublicKey.String()
+		d := byKey[key]
+		if d == nil {
 			continue
 		}
+		active := false
+		if !p.LastHandshakeTime.IsZero() {
+			g.core.NoteWGActivity(d.ID, p.LastHandshakeTime)
+			active = true
+		}
+		if prev, ok := g.rx[key]; ok && p.ReceiveBytes > prev {
+			g.core.NoteWGActivity(d.ID, now)
+		}
+		g.rx[key] = p.ReceiveBytes
+		if !active || now.Sub(g.touched[key]) < 30*time.Second {
+			continue
+		}
+		g.touched[key] = now
 		ep := ""
 		if p.Endpoint != nil {
 			ep = p.Endpoint.String()

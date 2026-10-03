@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.0
+
+### Fixed
+- **Windows computers couldn't be reached by other devices** (they could ping out but not be
+  pinged): Windows Defender Firewall blocks inbound traffic on a new adapter. The Gorget service
+  now adds a firewall rule that allows traffic from the network's own addresses on the Gorget
+  adapter only, and removes it when it disconnects.
+- **Status of devices lagged:** WireGuard apps now show online or offline within seconds (the
+  gateway samples every 5 seconds and the console updates by itself), and a device that
+  disappears without closing its connection is noticed within about half a minute (HTTP/2
+  keep-alive pings).
+- New WireGuard apps default to **Private network only**, so they reach your devices and shared
+  networks and not just the internet. The routing of an existing app can now be changed.
+- The tab strip no longer shows scrollbars; Settings has a sectioned menu instead of twelve tabs.
+
+### New
+- **Sign-in alerts** with details (who, when, how, address, country, browser, why), by email and push.
+- **Gotify and ntfy** push notifications, with test buttons, plus "device offline / back online"
+  alerts. See [notifications](docs/guide/notifications.md).
+- **Network map** rewritten: grouped by person around the gateway, or a connection view that
+  arranges itself; search, filters, minimap, and a details panel.
+- **Console:** search, sorting and pagination on devices, WireGuard apps, people and setup keys;
+  bulk actions and CSV export for devices; suggestions while typing (tags, networks, access-rule
+  selectors, DNS records); times that keep themselves current; devices and people in the Ctrl+K
+  search; edit dialog for WireGuard apps.
+
 ## 0.4.2
 
 ### Fixed

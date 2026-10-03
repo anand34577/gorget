@@ -254,7 +254,13 @@ function SiteRouteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
           </Field>
         )}
         <Field label="Networks behind it" hint="Press Enter after each one, for example 192.168.1.0/24 for the LAN and 192.168.20.0/24 for a VLAN.">
-          <ListEditor values={cidrs} onChange={setCidrs} placeholder="192.168.1.0/24" />
+          <ListEditor
+            values={cidrs}
+            onChange={setCidrs}
+            placeholder="192.168.1.0/24"
+            suggestions={[{ value: "192.168.1.0/24", label: "Typical home LAN" }, { value: "192.168.0.0/24", label: "Typical home LAN (alternative)" }, { value: "10.0.0.0/24", label: "Typical office network" }]}
+            validate={(v) => (/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(v) ? null : `${v} isn't a network like 192.168.1.0/24`)}
+          />
         </Field>
         <Note>
           Who may use these networks is decided by your <Link to="/access" className="underline">access rules</Link>. On the router, allow forwarding from the WireGuard interface to these networks (the OpenWrt configuration download includes this).

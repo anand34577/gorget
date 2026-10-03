@@ -48,6 +48,9 @@ type EmailNotify struct {
 	AccessRequests  bool `json:"access_requests"`
 	RouteAdvertised bool `json:"route_advertised"`
 	LoginLockout    bool `json:"login_lockout"`
+	// DeviceOffline / DeviceOnline: a device has been offline for over a minute, and is back.
+	DeviceOffline bool `json:"device_offline"`
+	DeviceOnline  bool `json:"device_online"`
 	// OwnersToo also tells people about their own devices (expiring keys, blocked, new country).
 	OwnersToo bool `json:"owners_too"`
 	// Invitations emails new people a link to choose their password.
@@ -71,6 +74,7 @@ func (s AllSettings) Redacted() AllSettings {
 	if s.Email.Recipients == nil {
 		s.Email.Recipients = []string{}
 	}
+	s.Notifications = s.Notifications.redacted()
 	return s
 }
 
@@ -298,7 +302,7 @@ func composeMail(network, publicURL string, to []string, subject, intro string, 
 	if link != "" {
 		fmt.Fprintf(&t, "\nOpen: %s\n", link)
 	}
-	fmt.Fprintf(&t, "\n-- \n%s · %s\nYou get this because email notifications are on in Settings > Email.\n", network, publicURL)
+	fmt.Fprintf(&t, "\n-- \n%s · %s\nYou get this because notifications are on for this network.\n", network, publicURL)
 
 	var h strings.Builder
 	h.WriteString(`<!doctype html><html><body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1d232b">`)
@@ -316,32 +320,29 @@ func composeMail(network, publicURL string, to []string, subject, intro string, 
 	if link != "" {
 		fmt.Fprintf(&h, `<a href="%s" style="display:inline-block;background:#3A55B4;color:#ffffff;text-decoration:none;padding:9px 16px;border-radius:7px;font-size:14px;font-weight:600">Open in Gorget</a>`, html.EscapeString(link))
 	}
-	fmt.Fprintf(&h, `</td></tr></table><p style="max-width:560px;margin:14px auto 0;font-size:12px;color:#8a929c">%s · <a href="%s" style="color:#8a929c">%s</a><br>Notification settings: Settings &gt; Email.</p></body></html>`,
+	fmt.Fprintf(&h, `</td></tr></table><p style="max-width:560px;margin:14px auto 0;font-size:12px;color:#8a929c">%s · <a href="%s" style="color:#8a929c">%s</a><br>Notification settings: Settings &gt; Notifications.</p></body></html>`,
 		html.EscapeString(network), html.EscapeString(publicURL), html.EscapeString(publicURL))
 	return mailer.Message{To: to, Subject: subject, Text: t.String(), HTML: h.String()}
 }
 
-// notify sends one notification to administrators (and, with ownerID, to the
+// mailNote emails one notification to administrators (and, with ownerDevice, to the
 // device owner when the setting allows it).
-func (c *Core) notify(ctx context.Context, subject, intro string, facts [][2]string, path string, ownerDeviceID string) {
+func (c *Core) mailNote(ctx context.Context, n note) {
 	s := c.Settings()
 	to := c.adminRecipients(ctx)
-	if ownerDeviceID != "" && s.Email.Notify.OwnersToo {
-		if e := c.ownerEmail(ctx, ownerDeviceID); e != "" && !slices.Contains(to, e) {
+	if n.ownerDevice != "" && s.Email.Notify.OwnersToo {
+		if e := c.ownerEmail(ctx, n.ownerDevice); e != "" && !slices.Contains(to, e) {
 			to = append(to, e)
 		}
 	}
-	link := ""
-	if path != "" {
-		link = strings.TrimSuffix(c.Cfg.PublicURL, "/") + path
-	}
+	link := c.linkFor(n.path)
 	// One message per recipient: people don't see each other's addresses.
 	for _, r := range to {
-		c.queueMail(composeMail(s.Network.Name, c.Cfg.PublicURL, []string{r}, subject, intro, facts, link))
+		c.queueMail(composeMail(s.Network.Name, c.Cfg.PublicURL, []string{r}, n.subject, n.intro, n.facts, link))
 	}
 }
 
-// runNotifier turns events into email.
+// runNotifier turns events into email and push notifications.
 func (c *Core) runNotifier(ctx context.Context) {
 	ch, cancel := c.Bus.Subscribe(256)
 	defer cancel()
@@ -350,10 +351,21 @@ func (c *Core) runNotifier(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case ev := <-ch:
-			if ev.Remote || !c.EmailEnabled() {
-				continue // the instance where it happened sends the mail
+			if ev.Remote || !(c.EmailEnabled() || c.PushEnabled()) {
+				continue // the instance where it happened sends the message
 			}
-			c.mailFor(ctx, ev)
+			switch ev.Type {
+			case EvLogin:
+				c.handleLogin(ctx, ev)
+			case EvDeviceOffline:
+				c.handleOffline(ctx, ev)
+			case EvDeviceOnline:
+				c.handleOnline(ctx, ev)
+			default:
+				if n, ok := describeEvent(ev); ok {
+					c.dispatch(ctx, n)
+				}
+			}
 		}
 	}
 }
@@ -373,66 +385,72 @@ func str(m any, k string) string {
 	return ""
 }
 
-func (c *Core) mailFor(ctx context.Context, ev Event) {
-	n := c.Settings().Email.Notify
+// describeEvent writes the notification for an event, if it has one.
+func describeEvent(ev Event) (note, bool) {
 	d := ev.Data
 	switch ev.Type {
 	case EvDevicePending:
-		if n.DevicePending {
-			c.notify(ctx, "Device waiting for approval: "+str(d, "name"),
-				"A new device signed in and is waiting for an administrator to approve it. Approve it only if you recognise it.",
-				[][2]string{{"Device", str(d, "name")}, {"Address", str(d, "ipv4")}}, "/devices/"+str(d, "id"), "")
-		}
+		return note{kind: "pending", subject: "Device waiting for approval: " + str(d, "name"),
+			intro:  "A new device signed in and is waiting for an administrator to approve it. Approve it only if you recognise it.",
+			facts:  [][2]string{{"Device", str(d, "name")}, {"Address", str(d, "ipv4")}},
+			path:   "/devices/" + str(d, "id"),
+			urgent: true, tags: []string{"hourglass_flowing_sand"}}, true
 	case EvDeviceCreated:
-		if n.DeviceAdded && str(d, "state") != store.StatePending {
-			c.notify(ctx, "New device joined: "+str(d, "name"),
-				"A device was added to your network.", [][2]string{{"Device", str(d, "name")}, {"Type", str(d, "kind")}, {"Address", str(d, "ipv4")}}, "/devices/"+str(d, "id"), "")
+		if str(d, "state") == store.StatePending {
+			return note{}, false
 		}
+		return note{kind: "added", subject: "New device joined: " + str(d, "name"),
+			intro: "A device was added to your network.",
+			facts: [][2]string{{"Device", str(d, "name")}, {"Type", str(d, "kind")}, {"Address", str(d, "ipv4")}},
+			path:  "/devices/" + str(d, "id"), tags: []string{"new"}}, true
 	case EvDeviceNewCountry:
-		if n.NewCountry {
-			c.notify(ctx, "Connection from a new country: "+str(d, "name"),
-				"A device connected from a country it hasn't used in the last 90 days. If this wasn't expected, disable the device.",
-				[][2]string{{"Device", str(d, "name")}, {"Country", str(d, "country")}, {"Public address", str(d, "public_ip")}}, "/devices/"+str(d, "id"), str(d, "id"))
-		}
+		return note{kind: "country", subject: "Connection from a new country: " + str(d, "name"),
+			intro:       "A device connected from a country it hasn't used in the last 90 days. If this wasn't expected, disable the device.",
+			facts:       [][2]string{{"Device", str(d, "name")}, {"Country", str(d, "country")}, {"Public address", str(d, "public_ip")}},
+			path:        "/devices/" + str(d, "id"),
+			ownerDevice: str(d, "id"), urgent: true, tags: []string{"earth_africa"}}, true
 	case EvDeviceBlocked:
-		if n.DeviceBlocked {
-			c.notify(ctx, "Device blocked by security rules: "+str(d, "name"),
-				"This device no longer meets your network's security rules and has lost access until it does.",
-				[][2]string{{"Device", str(d, "name")}, {"Reasons", str(d, "reasons")}}, "/devices/"+str(d, "id"), str(d, "id"))
-		}
+		return note{kind: "blocked", subject: "Device blocked by security rules: " + str(d, "name"),
+			intro:       "This device no longer meets your network's security rules and has lost access until it does.",
+			facts:       [][2]string{{"Device", str(d, "name")}, {"Reasons", str(d, "reasons")}},
+			path:        "/devices/" + str(d, "id"),
+			ownerDevice: str(d, "id"), urgent: true, tags: []string{"no_entry"}}, true
 	case EvDeviceKeyExpiry:
-		if n.KeyExpiring {
-			exp := ""
-			if v, ok := d.(map[string]any)["expires_at"].(int64); ok {
+		exp := ""
+		if m, ok := d.(map[string]any); ok {
+			if v, ok := m["expires_at"].(int64); ok {
 				exp = time.Unix(v, 0).UTC().Format("2 Jan 2006 15:04 UTC")
 			}
-			c.notify(ctx, "Sign-in expires soon: "+str(d, "name"),
-				"This device's sign-in expires soon. Sign in again on the device to keep it connected.",
-				[][2]string{{"Device", str(d, "name")}, {"Expires", exp}}, "/devices/"+str(d, "id"), str(d, "id"))
 		}
+		return note{kind: "expiring", subject: "Sign-in expires soon: " + str(d, "name"),
+			intro:       "This device's sign-in expires soon. Sign in again on the device to keep it connected.",
+			facts:       [][2]string{{"Device", str(d, "name")}, {"Expires", exp}},
+			path:        "/devices/" + str(d, "id"),
+			ownerDevice: str(d, "id"), tags: []string{"alarm_clock"}}, true
 	case EvAccessRequested:
-		if n.AccessRequests {
-			c.notify(ctx, "Access request from "+str(d, "requester"),
-				"Someone asked for temporary access. Approve or deny it in the console.",
-				[][2]string{{"From", str(d, "requester")}, {"Target", str(d, "target")}, {"Ports", str(d, "ports")}, {"Minutes", str(d, "minutes")}, {"Reason", str(d, "reason")}}, "/requests", "")
-		}
+		return note{kind: "access", subject: "Access request from " + str(d, "requester"),
+			intro: "Someone asked for temporary access. Approve or deny it in the console.",
+			facts: [][2]string{{"From", str(d, "requester")}, {"Target", str(d, "target")}, {"Ports", str(d, "ports")}, {"Minutes", str(d, "minutes")}, {"Reason", str(d, "reason")}},
+			path:  "/requests", tags: []string{"raised_hand"}}, true
 	case EvRouteAdvertised:
-		if n.RouteAdvertised {
-			what := str(d, "routes")
-			if str(d, "exit_node") == "true" {
-				what = "exit node (all internet traffic)"
-			}
-			c.notify(ctx, "Device wants to share networks: "+str(d, "device"),
-				"A device offers to carry traffic for other networks. It isn't used until an administrator approves it.",
-				[][2]string{{"Device", str(d, "device")}, {"Offers", what}}, "/routes", "")
+		what := str(d, "routes")
+		if str(d, "exit_node") == "true" {
+			what = "exit node (all internet traffic)"
 		}
+		return note{kind: "route", subject: "Device wants to share networks: " + str(d, "device"),
+			intro: "A device offers to carry traffic for other networks. It isn't used until an administrator approves it.",
+			facts: [][2]string{{"Device", str(d, "device")}, {"Offers", what}},
+			path:  "/routes", tags: []string{"link"}}, true
 	case EvLoginFailed:
-		if n.LoginLockout && str(d, "locked") == "true" {
-			c.notify(ctx, "Account locked after failed sign-ins: "+str(d, "email"),
-				"Too many wrong passwords were entered for this account, so it is locked for a while. If it wasn't the account owner, someone may be guessing passwords.",
-				[][2]string{{"Account", str(d, "email")}, {"From address", str(d, "ip")}}, "/activity", "")
+		if str(d, "locked") != "true" {
+			return note{}, false
 		}
+		return note{kind: "lockout", subject: "Account locked after failed sign-ins: " + str(d, "email"),
+			intro: "Too many wrong passwords were entered for this account, so it is locked for a while. If it wasn't the account owner, someone may be guessing passwords.",
+			facts: [][2]string{{"Account", str(d, "email")}, {"From address", str(d, "ip")}},
+			path:  "/activity", urgent: true, tags: []string{"lock", "warning"}}, true
 	}
+	return note{}, false
 }
 
 // ---------- invitations and password resets ----------

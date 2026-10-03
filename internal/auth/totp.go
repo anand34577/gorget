@@ -112,7 +112,7 @@ func (m *Manager) finishMFA(ctx context.Context, se *store.Session, u *store.Use
 	if err := m.st.UpdateSession(ctx, se); err != nil {
 		return err
 	}
-	m.completeLogin(ctx, u, ip, "password+"+method)
+	m.completeLogin(ctx, u, ip, se.UserAgent, "password+"+method)
 	return nil
 }
 

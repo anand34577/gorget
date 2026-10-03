@@ -139,16 +139,17 @@ func (m *Manager) startSession(ctx context.Context, u *store.User, ip, ua, metho
 		return nil, err
 	}
 	if !mfaPending {
-		m.completeLogin(ctx, u, ip, method)
+		m.completeLogin(ctx, u, ip, ua, method)
 	}
 	return &LoginResult{Token: token, Session: se, User: u, MFAPending: mfaPending}, nil
 }
 
-func (m *Manager) completeLogin(ctx context.Context, u *store.User, ip, method string) {
+func (m *Manager) completeLogin(ctx context.Context, u *store.User, ip, ua, method string) {
 	u.FailedLogins = 0
 	u.LastLoginAt = store.Now()
 	_ = m.st.UpdateUser(ctx, u)
 	m.core.Audit(ctx, core.Actor{ID: u.ID, Name: u.Email, IP: ip}, "auth.login", "user", u.ID, u.Email, map[string]string{"method": method})
+	m.core.Bus.Publish(core.EvLogin, map[string]any{"id": u.ID, "email": u.Email, "ip": ip, "user_agent": truncate(ua, 256), "method": method})
 }
 
 // HasMFA reports whether the user has any second factor enrolled.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, LogOut, Mail, MoreHorizontal, Plus, ShieldOff, Trash2, UserCog, UserRound, Users } from "lucide-react";
@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { ApiError, del, errMessage, get, patch, post } from "@/lib/api";
 import type { Group, Role, UserView } from "@/lib/types";
 import { useSession } from "@/lib/session";
-import { relTime, roleLabel } from "@/lib/utils";
+import { roleLabel } from "@/lib/utils";
+import { Ago, matchesQuery, Pagination, SearchInput, SortTh, useDebounced, useTable, useTick } from "@/components/data";
 import {
   Badge,
   Button,
@@ -25,6 +26,7 @@ import {
   PanelHeader,
   SecretBox,
   Select,
+  Skeleton,
   Table,
   Tabs,
   TabsContent,
@@ -76,6 +78,20 @@ function PeopleTab() {
   const qc = useQueryClient();
   const reauth = useReauth();
   const users = useQuery({ queryKey: ["users"], queryFn: () => get<UserView[]>("/users") });
+  const [q, setQ] = useState("");
+  const dq = useDebounced(q, 200);
+  const [roleF, setRoleF] = useState("");
+  useTick();
+  const list = useMemo(() => (users.data ?? []).filter((u) => (!roleF || u.role === roleF) && matchesQuery(dq, u.name, u.email, u.groups, roleLabel[u.role])), [users.data, dq, roleF]);
+  const table = useTable(list, {
+    defaultSort: { key: "name", dir: "asc" },
+    sorters: {
+      name: (a, b) => (a.name || a.email).localeCompare(b.name || b.email),
+      role: (a, b) => a.role.localeCompare(b.role),
+      devices: (a, b) => b.device_count - a.device_count,
+      login: (a, b) => b.last_login_at - a.last_login_at,
+    },
+  });
   const [invite, setInvite] = useState(params.get("new") === "1");
   const [editing, setEditing] = useState<UserView | null>(null);
   const [secret, setSecret] = useState<{ email: string; password: string } | null>(null);
@@ -96,7 +112,7 @@ function PeopleTab() {
   return (
     <Panel>
       <PanelHeader
-        title={`${users.data?.length ?? "…"} people`}
+        title={users.data ? `${users.data.length} ${users.data.length === 1 ? "person" : "people"}` : "People"}
         actions={
           manage && (
             <Button variant="primary" size="sm" onClick={() => setInvite(true)}>
@@ -105,19 +121,41 @@ function PeopleTab() {
           )
         }
       />
+      <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+        <SearchInput value={q} onChange={setQ} placeholder="Name, email, group or role" label="Search people" />
+        <Select value={roleF} onChange={(e) => setRoleF(e.target.value)} className="w-44" aria-label="Filter by role">
+          <option value="">All roles</option>
+          {(["owner", "admin", "network_admin", "auditor", "user"] as Role[]).map((r) => (
+            <option key={r} value={r}>
+              {roleLabel[r]}
+            </option>
+          ))}
+        </Select>
+      </div>
+      {users.isLoading ? (
+        <div className="space-y-2 p-4">
+          <Skeleton className="h-10" />
+          <Skeleton className="h-10" />
+        </div>
+      ) : list.length === 0 ? (
+        <EmptyState icon={<Users />} title="No one matches" action={<Button onClick={() => (setQ(""), setRoleF(""))}>Clear search and filters</Button>}>
+          Try another name or role.
+        </EmptyState>
+      ) : (
+      <>
       <Table>
         <thead>
           <tr>
-            <Th>Person</Th>
-            <Th>Role</Th>
+            <SortTh label="Person" sortKey="name" table={table} />
+            <SortTh label="Role" sortKey="role" table={table} />
             <Th className="hidden md:table-cell">Groups</Th>
-            <Th className="hidden md:table-cell">Devices</Th>
-            <Th className="hidden lg:table-cell">Last sign-in</Th>
+            <SortTh label="Devices" sortKey="devices" table={table} className="hidden md:table-cell" />
+            <SortTh label="Last sign-in" sortKey="login" table={table} className="hidden lg:table-cell" />
             <Th className="w-10" />
           </tr>
         </thead>
         <tbody>
-          {users.data?.map((u) => (
+          {table.rows.map((u) => (
             <tr key={u.id} className="hover:bg-surface-2">
               <Td>
                 <div className="flex items-center gap-2.5">
@@ -144,7 +182,7 @@ function PeopleTab() {
                 </div>
               </Td>
               <Td className="hidden md:table-cell">{u.device_count}</Td>
-              <Td className="hidden lg:table-cell text-ink-2">{relTime(u.last_login_at)}</Td>
+              <Td className="hidden lg:table-cell text-ink-2">{u.last_login_at ? <Ago ts={u.last_login_at} /> : "never"}</Td>
               <Td>
                 {manage && u.id !== me.user.id && (u.role !== "owner" || can("owner")) && (
                   <Menu trigger={<Button variant="ghost" size="icon" aria-label={`Actions for ${u.email}`}><MoreHorizontal /></Button>}>
@@ -201,6 +239,9 @@ function PeopleTab() {
           ))}
         </tbody>
       </Table>
+      <Pagination table={table} noun="people" />
+      </>
+      )}
       <InviteDialog
         open={invite}
         onOpenChange={(v) => {
@@ -348,6 +389,7 @@ function GroupsTab() {
   const groups = useQuery({ queryKey: ["groups"], queryFn: () => get<Group[]>("/groups") });
   const users = useQuery({ queryKey: ["users"], queryFn: () => get<UserView[]>("/users") });
   const [edit, setEdit] = useState<Partial<Group> | null>(null);
+  const [memberQ, setMemberQ] = useState("");
   const manage = can("manage_users") || can("manage_net");
   const emailOf = (id: string) => users.data?.find((u) => u.id === id)?.email ?? id.slice(0, 8);
 
@@ -450,9 +492,12 @@ function GroupsTab() {
               <Input value={edit.description ?? ""} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
             </Field>
             <fieldset>
-              <legend className="mb-2 text-[13px] font-medium">Members</legend>
+              <legend className="mb-2 flex items-center justify-between text-[13px] font-medium">
+                <span>Members <span className="font-normal text-ink-3">({edit.members?.length ?? 0} selected)</span></span>
+              </legend>
+              <SearchInput value={memberQ} onChange={setMemberQ} placeholder="Find a person" className="mb-2 sm:w-full" />
               <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-md border border-line p-2">
-                {users.data?.map((u) => (
+                {users.data?.filter((u) => matchesQuery(memberQ, u.name, u.email)).map((u) => (
                   <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-[13px] hover:bg-surface-2">
                     <input
                       type="checkbox"

@@ -330,8 +330,9 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 			"user_setup_keys": s.Auth.UserSetupKeys,
 			"gateway":         a.core.Cfg.Gateway.Enabled,
 		},
-		"version":    core.Version,
-		"public_url": a.core.Cfg.PublicURL,
+		"version":        core.Version,
+		"public_url":     a.core.Cfg.PublicURL,
+		"wg_tunnel_mode": s.Gateway.DefaultTunnelMode,
 	}
 	if p.session != nil {
 		resp["csrf_token"] = p.session.CSRFToken

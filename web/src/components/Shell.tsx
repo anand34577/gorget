@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { Command } from "cmdk";
 import {
   ChartLine,
@@ -25,11 +25,12 @@ import {
   Clock,
   BookOpen,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, type Perm } from "@/lib/session";
 import { useLiveUpdates } from "@/lib/events";
 import { useTheme } from "@/lib/theme";
-import { post } from "@/lib/api";
+import { get, post } from "@/lib/api";
+import type { Device, UserView } from "@/lib/types";
 import { cn, roleLabel } from "@/lib/utils";
 import { Wordmark } from "./Logo";
 import { Button, Menu, MenuItem, MenuSeparator, Spinner } from "./ui";
@@ -168,6 +169,8 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
     navigate(to);
   };
   const items = nav.flatMap((g) => g.items).filter((it) => !it.perm || can(it.perm));
+  const devices = useQuery({ queryKey: ["devices"], queryFn: () => get<Device[]>("/devices"), enabled: open });
+  const people = useQuery({ queryKey: ["users"], queryFn: () => get<UserView[]>("/users"), enabled: open && can("read") });
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 bg-[#0b0e12]/50 backdrop-blur-[2px]" onClick={() => setOpen(false)}>
@@ -179,7 +182,7 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
       >
         <div className="flex items-center gap-2 border-b border-line px-4">
           <Search className="size-4 text-ink-3" />
-          <Command.Input autoFocus placeholder="Jump to a page or action…" className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-3" />
+          <Command.Input autoFocus placeholder="Jump to a page, device, person or action…" className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-3" />
         </div>
         <Command.List className="max-h-80 overflow-y-auto p-2">
           <Command.Empty className="px-3 py-6 text-center text-[13px] text-ink-3">Nothing matches.</Command.Empty>
@@ -191,6 +194,34 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
               </Command.Item>
             ))}
           </Command.Group>
+          {!!devices.data?.length && (
+            <Command.Group heading="Devices" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-ink-3">
+              {devices.data.map((d) => (
+                <Command.Item
+                  key={d.id}
+                  value={`device ${d.name} ${d.ipv4} ${d.user_email} ${d.tags.join(" ")}`}
+                  onSelect={() => go(d.kind === "wireguard" ? "/wireguard" : `/devices/${d.id}`)}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13px] data-[selected=true]:bg-sunken [&_svg]:size-4 [&_svg]:text-ink-3"
+                >
+                  {d.kind === "wireguard" ? <Cable /> : <Monitor />}
+                  <span className="flex-1 truncate">{d.name}</span>
+                  <span className={cn("size-1.5 rounded-full", d.online ? "bg-verdigris" : "bg-line-strong")} />
+                  <span className="font-mono text-[11px] text-ink-3">{d.ipv4}</span>
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
+          {!!people.data?.length && (
+            <Command.Group heading="People" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-ink-3">
+              {people.data.map((u) => (
+                <Command.Item key={u.id} value={`person ${u.name} ${u.email} ${u.groups.join(" ")}`} onSelect={() => go("/users")} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13px] data-[selected=true]:bg-sunken [&_svg]:size-4 [&_svg]:text-ink-3">
+                  <UserRound />
+                  <span className="flex-1 truncate">{u.name || u.email}</span>
+                  {u.name && <span className="text-[11px] text-ink-3">{u.email}</span>}
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
           <Command.Group heading="Actions" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-ink-3">
             <Command.Item onSelect={() => go("/wireguard?new=1")} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13px] data-[selected=true]:bg-sunken">
               <Cable className="size-4 text-ink-3" /> Add a WireGuard app
@@ -213,9 +244,23 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
   );
 }
 
+const pageTitles: Record<string, string> = { "/account": "Account & security", "/device": "Approve a device" };
+
 export function Shell() {
   useLiveUpdates();
   const { me } = useSession();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // The page scrolls inside <main>, so the browser doesn't reset it when the route changes.
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [location.pathname]);
+  useEffect(() => {
+    const items = nav.flatMap((g) => g.items);
+    const path = "/" + location.pathname.split("/")[1];
+    const label = pageTitles[path] ?? items.find((it) => it.to === path)?.label;
+    document.title = label ? `${label} · ${me.network.name}` : me.network.name;
+  }, [location.pathname, me.network.name]);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   useEffect(() => {
@@ -223,6 +268,8 @@ export function Shell() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setCmdOpen((v) => !v);
+      } else if (e.key === "Escape") {
+        setMobileNav(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -274,7 +321,7 @@ export function Shell() {
           </Button>
           <Wordmark />
         </header>
-        <main className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8 sm:py-8">
             <Suspense
               fallback={

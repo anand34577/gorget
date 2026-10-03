@@ -227,6 +227,9 @@ func (a *API) Routes() http.Handler {
 		r.Get("/settings/email", a.emailStatus)
 		r.Put("/settings/email", a.putEmail)
 		r.Post("/settings/email/test", a.testEmail)
+		r.Get("/settings/notifications", a.notificationsStatus)
+		r.Put("/settings/notifications", a.putNotifications)
+		r.Post("/settings/notifications/test", a.testNotification)
 		r.Put("/settings/{section}", a.putSettings)
 		r.Post("/settings/network/readdress", a.readdress)
 

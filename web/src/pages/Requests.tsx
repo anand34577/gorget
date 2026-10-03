@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { errMessage, get, post } from "@/lib/api";
 import type { AccessRequest, Device, UserView } from "@/lib/types";
 import { useSession } from "@/lib/session";
-import { fmtDate, relTime } from "@/lib/utils";
+import { fmtDate } from "@/lib/utils";
+import { Ago, Pagination, useTable, useTick } from "@/components/data";
 import { Badge, Button, confirmAction, Dialog, EmptyState, ErrorNote, Field, Input, Mono, PageHeader, Panel, PanelHeader, Select, Skeleton, Textarea } from "@/components/ui";
 
 const durations: [number, string][] = [
@@ -59,6 +60,7 @@ export function Requests() {
     }
   };
 
+  useTick();
   const { waiting, active, history } = useMemo(() => {
     const now = Date.now() / 1000;
     const all = list.data ?? [];
@@ -69,6 +71,7 @@ export function Requests() {
     };
   }, [list.data]);
 
+  const historyTable = useTable(history, { defaultSort: undefined, pageSize: 10 });
   return (
     <>
       <PageHeader
@@ -108,7 +111,7 @@ export function Requests() {
                         <span className="font-medium">{r.requester}</span> wants <Mono>{r.target}</Mono> <span className="text-ink-3">ports</span> <Mono>{r.ports}</Mono> <span className="text-ink-3">for</span> {durationLabel(r.minutes)}
                       </div>
                       {r.reason && <div className="mt-0.5 text-ink-2">“{r.reason}”</div>}
-                      <div className="text-xs text-ink-3">{relTime(r.created_at)}</div>
+                      <div className="text-xs text-ink-3"><Ago ts={r.created_at} /></div>
                     </div>
                     <Button size="sm" variant="primary" onClick={() => act(r.id, "approve")}>
                       <Check /> Approve
@@ -129,7 +132,7 @@ export function Requests() {
                   <li key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-[13px]">
                     <div className="min-w-0 flex-1">
                       <span className="font-medium">{r.requester === me.user.email ? "You" : r.requester}</span> can reach <Mono>{r.target}</Mono> <span className="text-ink-3">ports</span> <Mono>{r.ports}</Mono>
-                      <div className="text-xs text-ink-3">ends {relTime(r.granted_until)} · approved by {r.decided_by}</div>
+                      <div className="text-xs text-ink-3">ends <Ago ts={r.granted_until} /> · approved by {r.decided_by}</div>
                     </div>
                     {admin && (
                       <Button
@@ -151,7 +154,7 @@ export function Requests() {
               <ul className="divide-y divide-line">
                 {waiting.map((r) => (
                   <li key={r.id} className="px-5 py-3 text-[13px]">
-                    <Mono>{r.target}</Mono> <span className="text-ink-3">ports</span> <Mono>{r.ports}</Mono> · {durationLabel(r.minutes)} <span className="text-ink-3">· asked {relTime(r.created_at)}</span>
+                    <Mono>{r.target}</Mono> <span className="text-ink-3">ports</span> <Mono>{r.ports}</Mono> · {durationLabel(r.minutes)} <span className="text-ink-3">· asked <Ago ts={r.created_at} /></span>
                   </li>
                 ))}
               </ul>
@@ -161,7 +164,7 @@ export function Requests() {
             <Panel>
               <PanelHeader title="History" />
               <ul className="divide-y divide-line">
-                {history.slice(0, 50).map((r) => (
+                {historyTable.rows.map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-[13px]">
                     <span className="min-w-0 flex-1 truncate">
                       {admin && <span className="font-medium">{r.requester} · </span>}
@@ -171,6 +174,7 @@ export function Requests() {
                   </li>
                 ))}
               </ul>
+              <Pagination table={historyTable} noun="requests" />
             </Panel>
           )}
         </div>

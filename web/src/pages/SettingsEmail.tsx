@@ -8,7 +8,7 @@ import { useSession } from "@/lib/session";
 import { relTime } from "@/lib/utils";
 import { Badge, Button, Checkbox, ErrorNote, Field, Input, ListEditor, Note, Panel, PanelHeader, Select, Skeleton, ToggleRow } from "@/components/ui";
 
-const notifyRows: [keyof EmailNotify, string, string][] = [
+export const notifyRows: [keyof EmailNotify, string, string][] = [
   ["device_pending", "A device is waiting for approval", "So new devices don't sit unapproved."],
   ["device_added", "A device joins", "Every new device, including approved ones."],
   ["new_country", "A device connects from a new country", "Needs the country database (Settings > Device health)."],
@@ -17,6 +17,8 @@ const notifyRows: [keyof EmailNotify, string, string][] = [
   ["access_requests", "Someone requests temporary access", ""],
   ["route_advertised", "A device offers a network or exit node", "Networks are only used after approval."],
   ["login_lockout", "An account is locked after wrong passwords", "Can mean someone is guessing passwords."],
+  ["device_offline", "A device has been offline for over a minute", "Handy for servers and routers. A short grace period avoids a message every time a phone changes network."],
+  ["device_online", "A device is back online", "Only after an offline message was sent for it."],
 ];
 
 // Common providers, to save people looking up ports.
@@ -186,7 +188,7 @@ export function EmailTab() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Notifications" description="Who gets email, and about what." />
+        <PanelHeader title="Email notifications" description="Who gets email, and about what. Sign-in alerts and push messages (Gotify, ntfy) are under Settings > Notifications." />
         <fieldset disabled={!canEdit} className="space-y-5 px-5 py-4">
           <Field label="Send administrator notifications to" hint="Leave empty to notify every owner and admin.">
             <ListEditor values={draft.recipients} onChange={(v) => set({ recipients: v })} placeholder="it@example.com" />

@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -690,8 +689,8 @@ func parseCIDRList(in []string) (store.StringList, error) {
 // DeviceOnline reports presence for API listings.
 func (c *Core) DeviceOnline(d *store.Device) bool {
 	if d.Kind == store.KindWireGuard {
-		// Standard WireGuard peers count as online with a recent handshake.
-		return d.LastSeenAt > 0 && time.Since(time.Unix(d.LastSeenAt, 0)) < 3*time.Minute
+		// Standard WireGuard peers are online while the gateway keeps seeing traffic from them.
+		return c.wgOnline(d)
 	}
 	return c.Coord.IsOnline(d.ID)
 }

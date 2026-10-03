@@ -1,5 +1,8 @@
 # Email notifications
 
+For push messages on your phone (Gotify, ntfy) and sign-in alerts, see
+[notifications and sign-in alerts](notifications.md).
+
 Gorget can email administrators when something needs a look, invite new people, and send
 password-reset links. It uses your own mail provider over SMTP; nothing goes through a
 third-party service.
@@ -34,6 +37,7 @@ Each one can be turned off separately:
 | Someone requests temporary access | Approve or deny in the console |
 | A device offers a network or exit node | Nothing is used until you approve it |
 | An account is locked after wrong passwords | Someone may be guessing passwords |
+| A device has been offline for over a minute, and when it is back | Handy for servers and routers (off by default) |
 
 Notifications go to every owner and admin, or to the addresses you list. With **Also tell
 people about their own devices**, the device owner gets the device-specific ones too.

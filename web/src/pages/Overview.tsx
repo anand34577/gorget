@@ -7,6 +7,7 @@ import type { Device, Overview as OverviewT, Stats } from "@/lib/types";
 import { TimeChart } from "@/components/charts";
 import { useSession } from "@/lib/session";
 import { cn, fmtBytes, osLabel, relTime } from "@/lib/utils";
+import { Ago, useTick } from "@/components/data";
 import { Badge, Button, EmptyState, Panel, PanelHeader, Skeleton, Tip } from "@/components/ui";
 
 export function Overview() {
@@ -93,7 +94,7 @@ export function Overview() {
           <ul className="divide-y divide-line">
             {o.recent_activity.map((e) => (
               <li key={e.seq} className="flex items-center gap-3 px-5 py-2.5 text-[13px]">
-                <span className="w-28 shrink-0 text-xs text-ink-3">{relTime(e.ts)}</span>
+                <span className="w-28 shrink-0 text-xs text-ink-3"><Ago ts={e.ts} /></span>
                 <span className="truncate">
                   <span className="font-medium">{e.actor || "system"}</span> <span className="text-ink-2">{describeAction(e.action)}</span>{" "}
                   {e.target_name && <span className="font-mono text-[12.5px]">{e.target_name}</span>}
@@ -220,6 +221,7 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 /** Signature element: every device is a lame (armour plate), overlapping like a gorget. */
 function LamellarBand({ devices, loading }: { devices?: Device[]; loading: boolean }) {
   const navigate = useNavigate();
+  useTick();
   if (loading) return <Skeleton className="h-24 w-full" />;
   const list = (devices ?? []).filter((d) => d.kind !== "gateway").sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
   if (!list.length) {
@@ -323,6 +325,7 @@ function Attention({ o }: { o: OverviewT }) {
 }
 
 function RecentDevices({ devices }: { devices?: Device[] }) {
+  useTick();
   const list = (devices ?? [])
     .filter((d) => d.kind !== "gateway")
     .sort((a, b) => Number(b.online) - Number(a.online) || b.last_seen_at - a.last_seen_at)
@@ -341,7 +344,7 @@ function RecentDevices({ devices }: { devices?: Device[] }) {
               </span>
             </span>
             <span className="hidden font-mono text-[12.5px] text-ink-2 sm:block">{d.ipv4}</span>
-            <span className="w-24 text-right text-xs text-ink-3">{d.online ? "now" : relTime(d.last_seen_at)}</span>
+            <span className="w-24 text-right text-xs text-ink-3">{d.online ? "now" : <Ago ts={d.last_seen_at} />}</span>
           </Link>
         </li>
       ))}

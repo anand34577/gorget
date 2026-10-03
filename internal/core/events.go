@@ -22,6 +22,7 @@ const (
 	EvUserDeleted     = "user.deleted"
 	EvSettingsUpdated = "settings.updated"
 	EvLoginFailed     = "auth.login_failed"
+	EvLogin           = "auth.login"
 	EvAccessRequested = "access.requested"
 	EvAccessApproved  = "access.approved"
 	EvAccessDenied    = "access.denied"
@@ -34,7 +35,7 @@ const (
 var WebhookEvents = []string{
 	EvDeviceCreated, EvDeviceUpdated, EvDeviceDeleted, EvDeviceOnline, EvDeviceOffline,
 	EvDevicePending, EvDeviceKeyExpiry, EvRouteAdvertised, EvRouteUpdated, EvPolicyUpdated,
-	EvUserCreated, EvUserUpdated, EvUserDeleted, EvSettingsUpdated, EvLoginFailed,
+	EvUserCreated, EvUserUpdated, EvUserDeleted, EvSettingsUpdated, EvLoginFailed, EvLogin,
 	EvAccessRequested, EvAccessApproved, EvAccessDenied, EvDeviceNewCountry, EvDeviceBlocked,
 }
 
