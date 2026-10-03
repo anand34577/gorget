@@ -74,6 +74,8 @@ func main() {
 		err = cmdServe(args)
 	case "init", "setup":
 		err = cmdInit(args)
+	case "setup-link":
+		err = cmdSetupLink(args)
 	case "check", "doctor":
 		err = cmdCheck(args)
 	case "install", "uninstall", "start", "stop", "restart":

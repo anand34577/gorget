@@ -1,8 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.4.2
+
+### Fixed
+- `gorget-server setup-link` (new in 0.4.1) didn't run; it printed the help text. The Docker installer and
+  upgrades rely on it. Upgrade to 0.4.2.
+
+## 0.4.1
 
 ### Easier install and clearer documentation
+- The Windows installer (.msi) is attached to the release again.
 - **One-command server install:** `install-server.sh` now asks only for your domain (or takes
   `--domain` and `--yes`), installs and starts the service, and prints the setup link. `--docker`
   runs the server in Docker instead; running it again upgrades; `--uninstall` removes it.
