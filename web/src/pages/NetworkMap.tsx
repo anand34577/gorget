@@ -3,12 +3,13 @@ import { Link, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Background, Controls, Handle, MiniMap, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Cable, Globe, LayoutGrid, Monitor, Network, Server, Share2, Smartphone, Wand2, X } from "lucide-react";
-import { get } from "@/lib/api";
+import { Cable, Check, CircleSlash, FlaskConical, Globe, LayoutGrid, Monitor, Network, Server, Share2, Smartphone, Wand2, Waypoints, X } from "lucide-react";
+import { errMessage, get, post } from "@/lib/api";
 import { cn, osLabel } from "@/lib/utils";
 import { circleLayout, forceLayout, gridInBox, hubLayout, type Pos } from "@/lib/graphLayout";
-import { Badge, Button, Checkbox, EmptyState, PageHeader, Panel, Skeleton } from "@/components/ui";
+import { Badge, Button, Checkbox, EmptyState, Input, PageHeader, Panel, Skeleton } from "@/components/ui";
 import { Ago, SearchInput } from "@/components/data";
+import { SuggestInput } from "@/components/suggest";
 
 interface MapNode {
   id: string;
@@ -36,8 +37,12 @@ const HUB_ID = "__hub";
 
 type View = "groups" | "links";
 
+const NET_H = 46;
+const NETS_BOX = "g:~networks";
+
 type DevData = { n: MapNode; dim: boolean; hit: boolean; selected: boolean; links: number } & Record<string, unknown>;
 type ClusterData = { label: string; count: number; online: number; tagged: boolean; dim: boolean } & Record<string, unknown>;
+type NetData = { cidr: string; via: string; online: boolean; dim: boolean; selected: boolean } & Record<string, unknown>;
 type HubData = { name: string; sub: string; online: boolean; dim: boolean; selected: boolean } & Record<string, unknown>;
 
 // One invisible handle in the middle of every node: edges run centre to centre, and the node sits on top.
@@ -93,6 +98,27 @@ function DeviceNode({ data }: NodeProps<Node<DevData>>) {
   );
 }
 
+function NetworkNode({ data }: NodeProps<Node<NetData>>) {
+  return (
+    <div
+      style={{ width: NODE_W, height: NET_H }}
+      className={cn(
+        "flex items-center gap-2 rounded-xl border border-dashed bg-surface px-3 shadow-panel transition-[opacity,box-shadow]",
+        data.selected ? "border-blued ring-2 ring-blued/30" : data.online ? "border-verdigris/60" : "border-line-strong",
+        data.dim && "opacity-40",
+      )}
+      title={`${data.cidr} through ${data.via}`}
+    >
+      <Handles />
+      <Waypoints className={cn("size-4 shrink-0", data.online ? "text-verdigris" : "text-ink-3")} />
+      <div className="min-w-0">
+        <div className="truncate font-mono text-[12px] font-medium">{data.cidr}</div>
+        <div className="truncate text-[10.5px] text-ink-3">via {data.via}</div>
+      </div>
+    </div>
+  );
+}
+
 function HubNode({ data }: NodeProps<Node<HubData>>) {
   return (
     <div
@@ -130,13 +156,15 @@ function ClusterNode({ data, width, height }: NodeProps<Node<ClusterData>>) {
   );
 }
 
-const nodeTypes = { device: DeviceNode, hub: HubNode, cluster: ClusterNode };
+const nodeTypes = { device: DeviceNode, hub: HubNode, cluster: ClusterNode, network: NetworkNode };
 
 interface Base {
   nodes: Node[];
-  edges: { id: string; source: string; target: string; dashed: boolean; online: boolean; kind: "hub" | "link" }[];
+  edges: { id: string; source: string; target: string; dashed: boolean; online: boolean; kind: "hub" | "link" | "net" }[];
   adjacency: Map<string, Set<string>>;
   dense: boolean;
+  /** Networks shared by routers and devices: node id -> network and the device that carries it. */
+  nets: Map<string, { cidr: string; via: string }>;
 }
 
 export default function NetworkMap() {
@@ -191,6 +219,10 @@ export default function NetworkMap() {
     const nodes: Node[] = [];
     const edges: Base["edges"] = [];
 
+    // The networks devices share (a router's LAN and VLANs) are part of the picture.
+    const nets = new Map<string, { cidr: string; via: string }>();
+    for (const n of devices) for (const cidr of n.routes) nets.set(`net:${n.id}:${cidr}`, { cidr, via: n.id });
+
     if (view === "groups") {
       // One box per person (or per tag for servers), around the gateway.
       const groups = new Map<string, MapNode[]>();
@@ -204,8 +236,12 @@ export default function NetworkMap() {
           const g = gridInBox(members.length, { w: NODE_W, h: NODE_H });
           return { key, members: members.sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name)), ...g, id: `g:${key}` };
         });
+      const netList = [...nets.entries()];
+      const netGrid = netList.length ? gridInBox(netList.length, { w: NODE_W, h: NET_H }, { maxCols: 2 }) : null;
       const hubSize = { w: 220, h: 64 };
-      const placed = hubLayout(boxes.map((b) => ({ id: b.id, w: b.w, h: b.h })), hubSize);
+      const sizes = boxes.map((b) => ({ id: b.id, w: b.w, h: b.h }));
+      if (netGrid) sizes.push({ id: NETS_BOX, w: netGrid.w, h: netGrid.h });
+      const placed = hubLayout(sizes, hubSize);
       nodes.push({ id: gw || HUB_ID, type: "hub", position: placed.hub, data: hubData() });
       for (const b of boxes) {
         const p = placed.boxes.get(b.id)!;
@@ -225,20 +261,48 @@ export default function NetworkMap() {
         });
         edges.push({ id: `h:${b.id}`, source: gw || HUB_ID, target: b.id, dashed: false, online: b.members.some((m) => m.online), kind: "hub" });
       }
+      if (netGrid) {
+        const p = placed.boxes.get(NETS_BOX)!;
+        const up = netList.filter(([, v]) => byId.get(v.via)?.online).length;
+        nodes.push({ id: NETS_BOX, type: "cluster", position: p, width: netGrid.w, height: netGrid.h, selectable: false, zIndex: 0, data: { label: "Networks you can reach", count: netList.length, online: up, tagged: true, dim: false } satisfies ClusterData });
+        netList.forEach(([id, v], i) => {
+          const via = byId.get(v.via);
+          nodes.push({ id, type: "network", parentId: NETS_BOX, extent: "parent", position: netGrid.positions[i], zIndex: 1, data: { cidr: v.cidr, via: via?.name ?? "?", online: !!via?.online, dim: false, selected: false } satisfies NetData });
+          edges.push({ id: `n:${id}`, source: id, target: v.via, dashed: true, online: !!via?.online, kind: "net" });
+        });
+      }
     } else {
       // Real links: force layout when sparse, a ring with faint lines when almost everything reaches everything.
-      const lnodes = kept.map((n) => ({ id: n.id, w: n.id === gw ? 220 : NODE_W, h: n.id === gw ? 64 : NODE_H, group: n.user || "~" }));
+      const netEdges = [...nets.entries()].map(([id, v]) => ({ source: id, target: v.via }));
+      const lnodes = [
+        ...kept.map((n) => ({ id: n.id, w: n.id === gw ? 220 : NODE_W, h: n.id === gw ? 64 : NODE_H, group: n.user || "~" })),
+        ...[...nets.entries()].map(([id, v]) => ({ id, w: NODE_W, h: NET_H, group: byId.get(v.via)?.user || "~" })),
+      ];
       const pos: Map<string, Pos> = dense
         ? circleLayout(
-            [...lnodes].sort((a, b) => (a.group ?? "").localeCompare(b.group ?? "") || a.id.localeCompare(b.id)).filter((x) => x.id !== gw),
+            [...lnodes].sort((a, b) => (a.group ?? "").localeCompare(b.group ?? "") || a.id.localeCompare(b.id)).filter((x) => x.id !== gw && !x.id.startsWith("net:")),
             Math.max(260, devices.length * 30),
           )
-        : forceLayout(lnodes, [...links.values()]);
+        : forceLayout(lnodes, [...links.values(), ...netEdges]);
       if (dense && gw) pos.set(gw, { x: -110, y: -32 });
+      if (dense) {
+        // Networks sit just outside the ring, next to the device that carries them.
+        let k = 0;
+        for (const [id, v] of nets) {
+          const p = pos.get(v.via) ?? { x: 0, y: 0 };
+          pos.set(id, { x: p.x * 1.35 + (k++ % 2) * 12, y: p.y * 1.35 + NODE_H });
+        }
+      }
       for (const n of kept) {
         const p = pos.get(n.id) ?? { x: 0, y: 0 };
         if (n.id === gw) nodes.push({ id: n.id, type: "hub", position: p, data: hubData() });
         else nodes.push({ id: n.id, type: "device", position: p, data: { n, dim: false, hit: false, selected: false, links: adjacency.get(n.id)?.size ?? 0 } satisfies DevData });
+      }
+      for (const [id, v] of nets) {
+        const p = pos.get(id) ?? { x: 0, y: 0 };
+        const via = byId.get(v.via);
+        nodes.push({ id, type: "network", position: p, data: { cidr: v.cidr, via: via?.name ?? "?", online: !!via?.online, dim: false, selected: false } satisfies NetData });
+        edges.push({ id: `n:${id}`, source: id, target: v.via, dashed: true, online: !!via?.online, kind: "net" });
       }
       let i = 0;
       for (const l of links.values()) {
@@ -247,7 +311,11 @@ export default function NetworkMap() {
         edges.push({ id: `l${i++}`, source: l.source, target: l.target, dashed: l.dashed, online: !!a?.online && !!b?.online, kind: "link" });
       }
     }
-    return { nodes, edges, adjacency, dense };
+    for (const [id, v] of nets) {
+      (adjacency.get(id) ?? adjacency.set(id, new Set()).get(id)!).add(v.via);
+      (adjacency.get(v.via) ?? adjacency.set(v.via, new Set()).get(v.via)!).add(id);
+    }
+    return { nodes, edges, adjacency, dense, nets };
     // seed only forces a recompute ("Re-arrange")
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, view, onlyOnline, hideWG, seed]);
@@ -265,6 +333,12 @@ export default function NetworkMap() {
         const related = !selected || nd.id === selected || !!neighbours?.has(nd.id);
         return { ...nd, data: { ...d, hit, selected: nd.id === selected, dim: (!!q && !hit) || (view === "links" && !related) } };
       }
+      if (nd.type === "network") {
+        const d = nd.data as NetData;
+        const hit = !!q && `${d.cidr} ${d.via}`.toLowerCase().includes(q);
+        const related = !selected || nd.id === selected || !!neighbours?.has(nd.id);
+        return { ...nd, data: { ...d, selected: nd.id === selected, dim: (!!q && !hit) || (view === "links" && !related) } };
+      }
       if (nd.type === "hub") {
         const d = nd.data as HubData;
         return { ...nd, data: { ...d, selected: nd.id === selected, dim: view === "links" && !!selected && nd.id !== selected && !neighbours?.has(nd.id) } };
@@ -274,7 +348,7 @@ export default function NetworkMap() {
     const faint = base.dense && view === "links";
     const edges: Edge[] = base.edges.map((e) => {
       const touches = !!selected && (e.source === selected || e.target === selected);
-      const dimmed = !!selected && !touches && e.kind === "link";
+      const dimmed = !!selected && !touches && e.kind !== "hub" && view === "links";
       return {
         id: e.id,
         source: e.source,
@@ -282,7 +356,7 @@ export default function NetworkMap() {
         type: e.kind === "hub" ? "default" : "straight",
         animated: e.kind === "hub" ? e.online : touches && e.online,
         style: {
-          stroke: touches ? "var(--blued)" : e.online ? "var(--verdigris)" : "var(--line-strong)",
+          stroke: touches ? "var(--blued)" : e.kind === "net" ? (e.online ? "var(--blued)" : "var(--line-strong)") : e.online ? "var(--verdigris)" : "var(--line-strong)",
           strokeWidth: touches ? 2 : e.kind === "hub" ? 1.6 : 1.2,
           strokeDasharray: e.dashed ? "4 4" : undefined,
           opacity: dimmed ? 0.08 : faint && !touches ? 0.18 : e.online || touches ? 0.85 : 0.6,
@@ -293,6 +367,8 @@ export default function NetworkMap() {
   }, [base, query, selected, view]);
 
   const sel = selected && data ? data.nodes.find((n) => n.id === selected) : undefined;
+  const selNet = selected && base ? base.nets.get(selected) : undefined;
+  const selNetVia = selNet && data ? data.nodes.find((n) => n.id === selNet.via) : undefined;
   const peers = sel && base ? [...(base.adjacency.get(sel.id) ?? [])].map((id) => data!.nodes.find((n) => n.id === id)).filter((n): n is MapNode => !!n) : [];
   const total = data?.nodes.filter((n) => n.kind !== "gateway").length ?? 0;
   const online = data?.nodes.filter((n) => n.kind !== "gateway" && n.online).length ?? 0;
@@ -377,6 +453,32 @@ export default function NetworkMap() {
             </div>
           )}
 
+          {selNet && (
+            <div className="absolute right-3 top-3 w-72 max-w-[calc(100%-1.5rem)] rounded-lg border border-line bg-surface p-4 shadow-panel" role="dialog" aria-label={`${selNet.cidr} details`}>
+              <div className="flex items-start gap-2">
+                <Waypoints className={cn("mt-0.5 size-4 shrink-0", selNetVia?.online ? "text-verdigris" : "text-ink-3")} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-sm font-semibold">{selNet.cidr}</div>
+                  <div className="text-xs text-ink-3">{selNetVia?.online ? "Reachable" : "Unreachable: its router is offline"}</div>
+                </div>
+                <Button variant="ghost" size="icon" aria-label="Close" onClick={() => setSelected(null)}>
+                  <X />
+                </Button>
+              </div>
+              <p className="mt-3 text-[13px] text-ink-2">
+                Devices reach this network through <b>{selNetVia?.name}</b>. Who may use it is decided by your access rules.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" className="flex-1" onClick={() => setSelected(selNet.via)}>
+                  Show {selNetVia?.name}
+                </Button>
+                <Button size="sm" className="flex-1" onClick={() => navigate("/routes")}>
+                  Manage routes
+                </Button>
+              </div>
+            </div>
+          )}
+
           {sel && (
             <div className="absolute right-3 top-3 w-72 max-w-[calc(100%-1.5rem)] rounded-lg border border-line bg-surface p-4 shadow-panel" role="dialog" aria-label={`${sel.name} details`}>
               <div className="flex items-start gap-2">
@@ -425,6 +527,7 @@ export default function NetworkMap() {
                   </div>
                 </div>
               )}
+              {sel.kind !== "gateway" && data && <QuickCheck from={sel} others={data.nodes.filter((n) => n.id !== sel.id && n.kind !== "gateway")} nets={[...(base?.nets.values() ?? [])].map((x) => x.cidr)} />}
               {sel.kind !== "gateway" && (
                 <Button size="sm" className="mt-3 w-full" onClick={() => navigate(sel.kind === "wireguard" ? "/wireguard" : `/devices/${sel.id}`)}>
                   Open device
@@ -443,6 +546,9 @@ export default function NetworkMap() {
           <span className="flex items-center gap-1.5">
             <span className="w-4 border-t-2 border-dashed border-line-strong" /> through the gateway
           </span>
+          <span className="flex items-center gap-1.5">
+            <Waypoints className="size-3.5" /> a network shared by a router
+          </span>
           {data && (
             <span className="ml-auto">
               Updated <Ago ts={Math.floor(dataUpdatedAt / 1000)} /> · <Link to="/devices" className="underline-offset-2 hover:underline">device list</Link>
@@ -451,5 +557,57 @@ export default function NetworkMap() {
         </div>
       </Panel>
     </>
+  );
+}
+
+/** Ask "can this device reach that one?" without leaving the map. */
+function QuickCheck({ from, others, nets }: { from: MapNode; others: MapNode[]; nets: string[] }) {
+  const [to, setTo] = useState("");
+  const [port, setPort] = useState("");
+  const [res, setRes] = useState<{ allowed: boolean; reason: string } | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const suggestions = useMemo(
+    () => [
+      ...others.map((n) => ({ value: n.name, label: n.name, hint: n.ipv4, group: "Devices" })),
+      ...[...new Set(nets)].map((c) => ({ value: c.replace(/\/\d+$/, ""), label: c, group: "Networks" })),
+    ],
+    [others, nets],
+  );
+  const run = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await post<{ decision: { allowed: boolean; reason: string } }>("/policy/check", { src: from.name, dst: to.trim(), port: Number(port) || 0, proto: port ? "tcp" : "icmp" });
+      setRes(r.decision);
+    } catch (e) {
+      setRes(null);
+      setErr(errMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-ink-3">
+        <FlaskConical className="size-3" /> Can it reach…
+      </div>
+      <div className="flex gap-1.5">
+        <SuggestInput value={to} onChange={(v) => (setTo(v), setRes(null))} onPick={(v) => (setTo(v), setRes(null))} onEnter={run} suggestions={suggestions} placeholder="device or address" aria-label="Destination" className="h-8" />
+        <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder="port" aria-label="Port" className="h-8 w-16 font-mono" />
+      </div>
+      <Button size="sm" className="mt-2 w-full" loading={busy} disabled={!to.trim()} onClick={run}>
+        Check
+      </Button>
+      {err && <p className="mt-2 text-xs text-oxide">{err}</p>}
+      {res && (
+        <div className={cn("mt-2 flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs", res.allowed ? "border-verdigris/30 bg-verdigris-soft" : "border-oxide/30 bg-oxide-soft")}>
+          {res.allowed ? <Check className="mt-0.5 size-3.5 shrink-0 text-verdigris" /> : <CircleSlash className="mt-0.5 size-3.5 shrink-0 text-oxide" />}
+          <span>
+            <b>{res.allowed ? "Allowed" : "Blocked"}</b>: {res.reason}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Cable, CheckCircle2, Circle, Clock, HeartPulse, KeyRound, Monitor, ShieldAlert, Waypoints, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Cable, CheckCircle2, Circle, Clock, HeartPulse, KeyRound, Laptop, Monitor, Router, Server, ShieldAlert, Waypoints, Wand2, X } from "lucide-react";
 import { get } from "@/lib/api";
 import type { Device, Overview as OverviewT, Stats } from "@/lib/types";
 import { TimeChart } from "@/components/charts";
 import { useSession } from "@/lib/session";
 import { cn, fmtBytes, osLabel, relTime } from "@/lib/utils";
 import { Ago, useTick } from "@/components/data";
+import { RouterWizard } from "./RouterWizard";
+import { Flow, type FlowState } from "@/components/flow";
 import { Badge, Button, EmptyState, Panel, PanelHeader, Skeleton, Tip } from "@/components/ui";
 
 export function Overview() {
@@ -32,6 +34,8 @@ export function Overview() {
       </div>
 
       {isAdmin && o && <GettingStarted o={o} />}
+
+      {isAdmin && o && <Glance o={o} />}
 
       <LamellarBand devices={devices.data} loading={devices.isLoading} />
 
@@ -113,6 +117,9 @@ const startedKey = "gorget.gettingStarted.dismissed";
 /** First-run checklist for administrators; hides itself once done or dismissed. */
 function GettingStarted({ o }: { o: OverviewT }) {
   const navigate = useNavigate();
+  const { can } = useSession();
+  const [wizard, setWizard] = useState(false);
+  const routes = useQuery({ queryKey: ["routes"], queryFn: () => get<{ routes: unknown[] }>("/routes"), enabled: can("manage_net") });
   const [dismissed, setDismissed] = useState(() => {
     try {
       return localStorage.getItem(startedKey) === "1";
@@ -137,6 +144,13 @@ function GettingStarted({ o }: { o: OverviewT }) {
       label: "Add another",
     },
     {
+      done: (routes.data?.routes.length ?? 0) > 0,
+      title: "Reach your home network from anywhere",
+      body: "Connect your router (OpenWrt or any WireGuard router) or a machine at home, so one app reaches everything.",
+      action: () => setWizard(true),
+      label: "Connect a router",
+    },
+    {
       done: o.users >= 2,
       title: "Invite the people who should use it",
       body: "Each person signs in with their own account, so access rules can tell them apart.",
@@ -152,7 +166,7 @@ function GettingStarted({ o }: { o: OverviewT }) {
     },
   ];
   const left = steps.filter((st) => !st.done).length;
-  if (dismissed || left === 0) return null;
+  if (dismissed || left === 0) return <RouterWizard open={wizard} onOpenChange={setWizard} />;
   const dismiss = () => {
     try {
       localStorage.setItem(startedKey, "1");
@@ -173,6 +187,10 @@ function GettingStarted({ o }: { o: OverviewT }) {
           </Button>
         }
       />
+      {wizard && <RouterWizard open={wizard} onOpenChange={setWizard} />}
+      <div className="h-1 bg-sunken" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={steps.length - left} aria-label="Setup progress">
+        <div className="h-full bg-verdigris transition-all" style={{ width: `${((steps.length - left) / steps.length) * 100}%` }} />
+      </div>
       <ol className="divide-y divide-line">
         {steps.map((st) => (
           <li key={st.title} className="flex items-start gap-3 px-5 py-3">
@@ -388,4 +406,68 @@ const actionText: Record<string, string> = {
 
 export function describeAction(a: string) {
   return actionText[a] ?? a.replace(/[._]/g, " ");
+}
+
+interface SystemLite {
+  tls: { mode: string; issuer: string; error?: string };
+  gateway: { enabled: boolean; running: boolean };
+}
+
+/** The whole network in one picture: devices, the server, routers and the networks behind them. */
+function Glance({ o }: { o: OverviewT }) {
+  const navigate = useNavigate();
+  const [wizard, setWizard] = useState(false);
+  const sys = useQuery({ queryKey: ["system"], queryFn: () => get<SystemLite>("/system/status"), refetchInterval: 15_000 });
+  const routes = useQuery({ queryKey: ["routes"], queryFn: () => get<{ routes: { device_id: string; cidr: string; approved: boolean; enabled: boolean; advertised: boolean; online: boolean }[] }>("/routes"), refetchInterval: 30_000 });
+  const rs = routes.data?.routes ?? [];
+  const routers = new Map<string, boolean>();
+  for (const r of rs) routers.set(r.device_id, r.online);
+  const routersUp = [...routers.values()].filter(Boolean).length;
+  const netsUp = rs.filter((r) => r.online && r.approved && r.enabled && r.advertised).length;
+  const tlsOk = !sys.data || sys.data.tls.mode === "off" || (!!sys.data.tls.issuer && !sys.data.tls.error);
+  const gwOk = !sys.data || !sys.data.gateway.enabled || sys.data.gateway.running;
+  const serverState: FlowState = !sys.data ? "wait" : tlsOk && gwOk ? "ok" : "warn";
+  const serverNote = !sys.data ? "checking…" : !tlsOk ? "certificate problem" : !gwOk ? "gateway not running" : sys.data.gateway.enabled ? "HTTPS and gateway running" : "HTTPS running";
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="Your network at a glance"
+        description="How your devices reach each other and your home or office networks."
+        actions={
+          <Link to="/map" className="inline-flex items-center gap-1 text-[13px] text-ink-2 hover:text-ink">
+            Network map <ArrowRight className="size-3.5" />
+          </Link>
+        }
+      />
+      <div className="px-5 py-6">
+        <Flow
+          steps={[
+            { icon: <Laptop />, title: `${o.devices.online} of ${o.devices.total} devices`, sub: "connected", state: o.devices.online > 0 ? "ok" : o.devices.total ? "warn" : "off" },
+            { icon: <Server />, title: "Gorget server", sub: serverNote, state: serverState },
+            rs.length
+              ? { icon: <Router />, title: `${routersUp} of ${routers.size} router${routers.size === 1 ? "" : "s"}`, sub: routersUp === routers.size ? "online" : "some offline", state: routersUp === routers.size ? "ok" : routersUp ? "wait" : "warn" }
+              : { icon: <Router />, title: "No router yet", sub: "optional", state: "off" },
+            rs.length
+              ? { icon: <Monitor />, title: `${netsUp} of ${rs.length} network${rs.length === 1 ? "" : "s"}`, sub: netsUp === rs.length ? "reachable" : "some unreachable", state: netsUp === rs.length ? "ok" : netsUp ? "wait" : "warn" }
+              : { icon: <Monitor />, title: "Home network", sub: "not connected", state: "off" },
+          ]}
+        />
+        {!rs.length && (
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-[13px] text-ink-2">
+            <span>Reach your home network from anywhere with just the Gorget app.</span>
+            <Button variant="primary" size="sm" onClick={() => setWizard(true)}>
+              <Wand2 /> Connect a router or network
+            </Button>
+          </div>
+        )}
+        {rs.length > 0 && routersUp < routers.size && (
+          <p className="mt-4 text-center text-xs text-ink-3">
+            A router is offline, so the networks behind it can't be reached. <button className="underline-offset-2 hover:underline" onClick={() => navigate("/routes")}>See routes</button>
+          </p>
+        )}
+      </div>
+      {wizard && <RouterWizard open={wizard} onOpenChange={setWizard} />}
+    </Panel>
+  );
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
-import { ArrowRight, CheckCircle2, CircleSlash, FlaskConical, GripVertical, History, Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleSlash, FlaskConical, GripVertical, History, Pencil, Plus, Trash2, Wand2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError, errMessage, get, post, put } from "@/lib/api";
 import type { Device, Group, Policy, PolicyAnalysis, PolicyRule, PolicyVersion, UserView } from "@/lib/types";
@@ -18,6 +18,8 @@ import {
   Field,
   Input,
   ListEditor,
+  Menu,
+  MenuItem,
   Mono,
   Note,
   PageHeader,
@@ -290,14 +292,43 @@ function VisualRules({ policy, onChange, readOnly }: { policy: Policy; onChange:
         </Panel>
       ))}
       {!readOnly && (
-        <Button onClick={() => setEditing({ index: rules.length, rule: { action: "accept", src: [], dst: [] } })}>
-          <Plus /> Add rule
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setEditing({ index: rules.length, rule: { action: "accept", src: [], dst: [] } })}>
+            <Plus /> Add rule
+          </Button>
+          <Menu trigger={<Button variant="ghost"><Wand2 /> Start from a template</Button>}>
+            {ruleTemplates.map((t) => (
+              <MenuItem key={t.label} onSelect={() => setEditing({ index: rules.length, rule: structuredClone(t.rule) })}>
+                <span>
+                  <span className="block">{t.label}</span>
+                  <span className="block text-[11px] text-ink-3">{t.hint}</span>
+                </span>
+              </MenuItem>
+            ))}
+          </Menu>
+        </div>
       )}
       {editing && <RuleDialog rule={editing.rule} hosts={Object.keys(policy.hosts ?? {})} onClose={() => setEditing(null)} onSave={(r) => (update(editing.index, r), setEditing(null))} />}
     </div>
   );
 }
+
+const portPresets: [string, string][] = [
+  ["Everything", "*"],
+  ["Web", "80,443"],
+  ["SSH", "22"],
+  ["Remote desktop", "3389"],
+  ["File sharing", "445"],
+  ["Router web", "80,443,22"],
+];
+
+const ruleTemplates: { label: string; hint: string; rule: PolicyRule }[] = [
+  { label: "Everyone reaches everything", hint: "Fine for a personal network.", rule: { action: "accept", description: "Everyone reaches everything", src: ["*"], dst: ["*:*"] } },
+  { label: "A person or group reaches a home network", hint: "Pick who, then the network.", rule: { action: "accept", description: "Reach the home network", src: [], dst: ["192.168.1.0/24:*"] } },
+  { label: "Someone reaches one device", hint: "For example the NAS on its file-sharing port.", rule: { action: "accept", description: "Reach one device", src: [], dst: [] } },
+  { label: "Everyone can use the internet through an exit node", hint: "Lets people send their traffic through your server.", rule: { action: "accept", description: "Use exit nodes", src: ["*"], dst: ["autogroup:internet:*"] } },
+  { label: "Everyone reaches their own devices only", hint: "A good starting point for shared networks.", rule: { action: "accept", description: "Own devices only", src: ["autogroup:member"], dst: ["autogroup:self:*"] } },
+];
 
 function RuleDialog({ rule, hosts, onClose, onSave }: { rule: PolicyRule; hosts: string[]; onClose: () => void; onSave: (r: PolicyRule) => void }) {
   const groups = useSelectorOptions();
@@ -356,6 +387,14 @@ function RuleDialog({ rule, hosts, onClose, onSave }: { rule: PolicyRule; hosts:
               <Button onClick={addDst} disabled={!dstSel.trim()}>
                 Add
               </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-3">
+              Ports:
+              {portPresets.map(([label, value]) => (
+                <button key={label} type="button" onClick={() => setPorts(value)} className={cn("rounded-md border px-2 py-0.5 text-[11.5px]", ports === value ? "border-blued bg-blued-soft text-blued" : "border-line bg-surface-2 text-ink-2 hover:border-line-strong")}>
+                  {label} <span className="font-mono text-ink-3">{value}</span>
+                </button>
+              ))}
             </div>
             <ListEditor values={r.dst} onChange={(v) => setR({ ...r, dst: v })} placeholder="or type a full entry: 192.168.1.0/24:445" />
           </div>

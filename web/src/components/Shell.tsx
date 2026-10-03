@@ -226,6 +226,11 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
             <Command.Item onSelect={() => go("/wireguard?new=1")} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13px] data-[selected=true]:bg-sunken">
               <Cable className="size-4 text-ink-3" /> Add a WireGuard app
             </Command.Item>
+            {can("manage_net") && (
+              <Command.Item onSelect={() => go("/routes?wizard=1")} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13px] data-[selected=true]:bg-sunken">
+                <Waypoints className="size-4 text-ink-3" /> Connect a router or home network
+              </Command.Item>
+            )}
             <Command.Item onSelect={() => go("/keys?new=1")} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13px] data-[selected=true]:bg-sunken">
               <KeyRound className="size-4 text-ink-3" /> Create a setup key
             </Command.Item>

@@ -85,6 +85,9 @@ func (c *Core) runWGPresence(ctx context.Context) {
 				_ = c.Store.SetLastSeen(ctx, id, store.Now())
 				c.Bus.Publish(EvDeviceOffline, map[string]string{"id": id})
 			}
+			if len(s.Routes[id]) > 0 {
+				c.Coord.Trigger() // a router going up or down can change which device carries a network
+			}
 		}
 		first = false
 	}

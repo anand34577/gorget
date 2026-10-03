@@ -2,6 +2,18 @@
 
 ## 0.5.0
 
+### One app for everything at home
+- **Fixed: networks behind a WireGuard router (OpenWrt) weren't reachable from the Gorget apps.**
+  The apps now get a route for them through the gateway, so one app reaches the router and your
+  LAN and VLANs, with no second VPN.
+- **Connect a router or network** wizard in the console: creates the router's configuration, adds
+  its networks, gives the OpenWrt script (with options for SSH/web access to the router and for
+  VLANs behind another router) and watches live until the router connects.
+- Routes use a router that is really up when several carry the same network.
+- More pictures: a "network at a glance" flow on the overview, a traffic-path diagram per router
+  on Routes, shared networks as nodes on the network map, and a "can this device reach…" check
+  on the map. Access rules get templates and port presets.
+
 ### Fixed
 - **Windows computers couldn't be reached by other devices** (they could ping out but not be
   pinged): Windows Defender Firewall blocks inbound traffic on a new adapter. The Gorget service

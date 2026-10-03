@@ -32,6 +32,9 @@ func (c *Core) NetworkMap(s *Snapshot, deviceID string) *pb.NetworkMap {
 
 	peerIDs := s.Compiled.Peers(deviceID)
 	gwExtra := []netip.Prefix{}
+	// Networks behind standard WireGuard routers (an OpenWrt box): carried by the gateway, so
+	// the client needs a route for them in its own routing table, not only in the WireGuard peer.
+	var gwRoutes []netip.Prefix
 	needGateway := false
 	var peers []*pb.Peer
 	for _, pid := range peerIDs {
@@ -44,7 +47,9 @@ func (c *Core) NetworkMap(s *Snapshot, deviceID string) *pb.NetworkMap {
 			// Standard WireGuard clients are reachable through the gateway.
 			needGateway = true
 			gwExtra = append(gwExtra, deviceAddrs(p, s.Settings.Network.IPv6On)...)
-			gwExtra = append(gwExtra, s.PrimaryRoutesOf(p.ID)...) // networks behind a WireGuard router
+			behind := s.PrimaryRoutesOf(p.ID) // networks behind a WireGuard router
+			gwExtra = append(gwExtra, behind...)
+			gwRoutes = append(gwRoutes, behind...)
 			continue
 		case store.KindGateway:
 			needGateway = true
@@ -54,7 +59,13 @@ func (c *Core) NetworkMap(s *Snapshot, deviceID string) *pb.NetworkMap {
 	}
 	if needGateway && s.GatewayID != "" {
 		if gw := s.Devices[s.GatewayID]; gw != nil {
-			peers = append(peers, c.peer(s, gw, gwExtra))
+			gp := c.peer(s, gw, gwExtra)
+			for _, r := range gwRoutes {
+				if !slices.Contains(gp.SubnetRoutes, r.String()) {
+					gp.SubnetRoutes = append(gp.SubnetRoutes, r.String())
+				}
+			}
+			peers = append(peers, gp)
 		}
 	}
 	sort.Slice(peers, func(i, j int) bool { return peers[i].Name < peers[j].Name })

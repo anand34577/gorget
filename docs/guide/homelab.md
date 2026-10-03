@@ -52,9 +52,18 @@ each one, which is normal when the router routes between your VLANs).
 The tag makes the device belong to the network rather than to a person, and its sign-in
 doesn't expire.
 
-### Option B: your OpenWrt router
+### Option B: your OpenWrt router (one app for everything)
 
-If your router runs OpenWrt with WireGuard:
+A router that only speaks plain WireGuard needs no second VPN: it connects to the Gorget gateway,
+and every Gorget device (laptop, phone) reaches the router *and* the networks behind it with the
+one Gorget app.
+
+**The easy way:** in the console open **Routes & exit nodes > Connect a router or network** (or
+the button on the Overview page). The wizard creates the configuration, adds your LAN and VLANs,
+gives you the OpenWrt script with options (open the router's SSH and web interface to Gorget devices;
+translate addresses for VLANs behind another router), and watches until the router connects.
+
+By hand, if you prefer:
 
 1. **WireGuard apps > New configuration**, name it `home-router`, choose
    **Private network only**.

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
 import { toOpenWrt } from "@/lib/openwrt";
-import { Ban, Cable, Download, FileText, Globe, MoreHorizontal, Pencil, Plus, RefreshCw, Split, Trash2 } from "lucide-react";
+import { Ban, Cable, Download, FileText, Globe, MoreHorizontal, Pencil, Plus, RefreshCw, Router, Split, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { errMessage, get, post } from "@/lib/api";
 import type { Device, UserView } from "@/lib/types";
@@ -52,7 +52,8 @@ function ipKey(ip: string): number {
 
 export function WireGuardApps() {
   const [params, setParams] = useSearchParams();
-  const { me } = useSession();
+  const navigate = useNavigate();
+  const { me, can } = useSession();
   const [open, setOpen] = useState(params.get("new") === "1");
   const [showConfig, setShowConfig] = useState<Device | null>(null);
   const [editing, setEditing] = useState<Device | null>(null);
@@ -83,9 +84,16 @@ export function WireGuardApps() {
         title="WireGuard apps"
         description="Connect anything that speaks WireGuard (the official apps, routers, NAS boxes) through the built-in gateway. No Gorget app needed."
         actions={
-          <Button variant="primary" onClick={() => setOpen(true)} disabled={!me.features.gateway}>
-            <Plus /> Add WireGuard app
-          </Button>
+          <>
+            {can("manage_net") && (
+              <Button onClick={() => navigate("/routes?wizard=1")} disabled={!me.features.gateway}>
+                <Router /> Connect a router
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => setOpen(true)} disabled={!me.features.gateway}>
+              <Plus /> Add WireGuard app
+            </Button>
+          </>
         }
       />
       {!me.features.gateway && <div className="mb-4"><Note tone="warn">The gateway is disabled in the server configuration, so WireGuard apps can't connect.</Note></div>}
@@ -488,8 +496,10 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
 function ConfigView({ name, config: wgConfig }: { name: string; config: string }) {
   const [qr, setQr] = useState("");
   const [format, setFormat] = useState<"wg" | "openwrt">("wg");
+  const [manage, setManage] = useState(true);
+  const [masq, setMasq] = useState(false);
   const hasKey = !wgConfig.includes("<REPLACE_WITH_YOUR_PRIVATE_KEY>");
-  const config = format === "openwrt" ? toOpenWrt(name, wgConfig) : wgConfig;
+  const config = format === "openwrt" ? toOpenWrt(name, wgConfig, { manage, masquerade: masq }) : wgConfig;
   const file = format === "openwrt" ? `${name}-openwrt.sh` : `${name}.conf`;
   useEffect(() => {
     if (hasKey) QRCode.toDataURL(wgConfig, { margin: 1, width: 260, errorCorrectionLevel: "M" }).then(setQr);
@@ -532,9 +542,13 @@ function ConfigView({ name, config: wgConfig }: { name: string; config: string }
           <CopyButton value={config} />
         </div>
         {format === "openwrt" && (
-          <p className="mb-2 text-xs text-ink-2">
-            A script of <Mono className="text-[11px]">uci</Mono> commands: it sets up the interface, a firewall zone and LAN forwarding. Afterwards add the router's networks under Routes &amp; exit nodes.
-          </p>
+          <div className="mb-3 space-y-2 rounded-lg border border-line bg-surface-2 p-3">
+            <p className="text-xs text-ink-2">
+              A script of <Mono className="text-[11px]">uci</Mono> commands: it sets up the interface, a firewall zone and LAN forwarding. Afterwards add the router's networks under Routes &amp; exit nodes.
+            </p>
+            <Checkbox checked={manage} onChange={setManage} label="Let Gorget devices open the router's SSH and web interface" />
+            <Checkbox checked={masq} onChange={setMasq} label="My home devices don't use this router as their gateway (VLANs behind another router): translate addresses" />
+          </div>
         )}
         <pre className="max-h-[340px] overflow-auto rounded-lg border border-line bg-sunken p-3 font-mono text-[12px] leading-relaxed">{config}</pre>
         {!hasKey && <p className="mt-2 text-xs text-ink-3">Replace the placeholder with the private key you saved when the app was created, or create a new configuration.</p>}
