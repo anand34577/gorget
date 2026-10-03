@@ -138,6 +138,8 @@ type AllSettings struct {
 	Posture PostureSettings `json:"posture"`
 	Routing RoutingSettings `json:"routing"`
 	Email   EmailSettings   `json:"email"`
+	// Notifications: Gotify, ntfy and sign-in alerts.
+	Notifications NotificationSettings `json:"notifications"`
 }
 
 func defaultSettings() AllSettings {
@@ -172,13 +174,15 @@ func defaultSettings() AllSettings {
 		},
 		Gateway: GatewaySettings{
 			ExitNode:            true,
-			DefaultTunnelMode:   store.TunnelFull,
+			DefaultTunnelMode:   store.TunnelSplit, // reach your devices and networks; full tunnel is a deliberate choice
 			DefaultExpiryDays:   0,
 			PersistentKeepalive: 25,
 		},
 		Posture: PostureSettings{Mode: PostureEnforce, MinOSVersion: map[string]string{}, AllowedNetworks: []string{}, ExemptTags: []string{}},
 		Routing: RoutingSettings{DomainRoutes: []DomainRoute{}},
 		Email:   defaultEmail(),
+
+		Notifications: defaultNotifications(),
 	}
 }
 
@@ -217,6 +221,9 @@ func (c *Core) loadSettings(ctx context.Context) error {
 		return err
 	}
 	if err := load(keyEmail, &s.Email, def.Email); err != nil {
+		return err
+	}
+	if err := load(keyNotify, &s.Notifications, def.Notifications); err != nil {
 		return err
 	}
 	normalizePosture(&s.Posture)
@@ -411,6 +418,11 @@ func (c *Core) SaveSettings(ctx context.Context, section string, update func(*Al
 			return old, err
 		}
 		key, val = keyEmail, s.Email
+	case keyNotify:
+		if err := validateNotifications(s.Notifications); err != nil {
+			return old, err
+		}
+		key, val = keyNotify, s.Notifications
 	default:
 		return old, fmt.Errorf("unknown settings section %q", section)
 	}

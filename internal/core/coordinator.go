@@ -236,6 +236,9 @@ func (co *Coordinator) rebuild(ctx context.Context) error {
 		d := &devs[i]
 		s.Devices[d.ID] = d
 		s.ByWGKey[d.WGPublicKey] = d.ID
+		if d.Kind == store.KindWireGuard && c.wgOnline(d) {
+			s.Online[d.ID] = true // so route failover can prefer a router that is really up
+		}
 		if !deviceActive(d, now) {
 			continue
 		}

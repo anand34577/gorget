@@ -4,7 +4,17 @@
  * a firewall zone for it, and forwarding between that zone and the LAN, so devices on
  * Gorget reach the router's networks and the reverse.
  */
-export function toOpenWrt(name: string, conf: string): string {
+export interface OpenWrtOptions {
+  /** Let Gorget devices open the router's own SSH and web interface (the access rules still decide who). */
+  manage?: boolean;
+  /**
+   * Translate the source address of Gorget traffic entering the LAN. Needed when home devices
+   * don't use this router as their gateway (a VLAN behind another router, a managed switch).
+   */
+  masquerade?: boolean;
+}
+
+export function toOpenWrt(name: string, conf: string, opts: OpenWrtOptions = {}): string {
   const iface: Record<string, string> = {};
   const peer: Record<string, string> = {};
   let section: Record<string, string> | null = null;
@@ -70,9 +80,11 @@ export function toOpenWrt(name: string, conf: string): string {
   out.push(
     "",
     "# Firewall: Gorget traffic may reach the LAN and the LAN may reach Gorget devices.",
-    "# The router itself only answers ping from the tunnel. No address translation, so",
-    "# your home devices see the real Gorget address of whoever connects.",
+    opts.manage ? "# Gorget devices may also open the router's SSH and web interface." : "# The router itself only answers ping from the tunnel.",
+    opts.masquerade ? "# Gorget traffic is translated to the router's address on the way into the LAN." : "# No address translation: your home devices see the real Gorget address of whoever connects.",
     "uci -q delete firewall.gorget || true",
+    "uci -q delete firewall.gorget_manage || true",
+    "uci -q delete firewall.gorget_masq || true",
     "uci -q delete firewall.gorget_to_lan || true",
     "uci -q delete firewall.lan_to_gorget || true",
     "uci -q delete firewall.gorget_ping || true",
@@ -94,6 +106,29 @@ export function toOpenWrt(name: string, conf: string): string {
     "uci set firewall.gorget_ping.proto='icmp'",
     "uci set firewall.gorget_ping.icmp_type='echo-request'",
     "uci set firewall.gorget_ping.target='ACCEPT'",
+  );
+  if (opts.manage) {
+    out.push(
+      "uci set firewall.gorget_manage=rule",
+      "uci set firewall.gorget_manage.name='Allow-Manage-Gorget'",
+      "uci set firewall.gorget_manage.src='gorget'",
+      "uci set firewall.gorget_manage.proto='tcp'",
+      "uci set firewall.gorget_manage.dest_port='22 80 443'",
+      "uci set firewall.gorget_manage.target='ACCEPT'",
+    );
+  }
+  if (opts.masquerade) {
+    // The first non-host range the gateway sends us is the Gorget network itself.
+    const overlay = list(peer["allowedips"]).find((a) => /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(a) && !a.endsWith("/32") && !a.endsWith("/0")) ?? "100.80.0.0/16";
+    out.push(
+      "uci set firewall.gorget_masq=nat",
+      "uci set firewall.gorget_masq.name='Gorget-to-LAN'",
+      "uci set firewall.gorget_masq.src='lan'",
+      `uci set firewall.gorget_masq.src_ip=${q(overlay)}`,
+      "uci set firewall.gorget_masq.target='MASQUERADE'",
+    );
+  }
+  out.push(
     "",
     "uci commit network",
     "uci commit firewall",

@@ -355,9 +355,13 @@ function Sessions() {
               <Button
                 size="sm"
                 onClick={async () => {
-                  await del(`/me/sessions/${s.id}`);
-                  qc.invalidateQueries({ queryKey: ["sessions"] });
-                  toast.success("Signed out");
+                  try {
+                    await del(`/me/sessions/${s.id}`);
+                    qc.invalidateQueries({ queryKey: ["sessions"] });
+                    toast.success("Signed out");
+                  } catch (e) {
+                    toast.error(errMessage(e));
+                  }
                 }}
               >
                 Sign out
@@ -413,8 +417,12 @@ function Tokens() {
                 variant="danger-ghost"
                 onClick={async () => {
                   if (!(await confirmAction({ title: `Delete ${t.name}?`, description: "Scripts using it stop working immediately.", confirm: "Delete token", danger: true }))) return;
-                  await del(`/me/tokens/${t.id}`);
-                  qc.invalidateQueries({ queryKey: ["tokens"] });
+                  try {
+                    await del(`/me/tokens/${t.id}`);
+                    qc.invalidateQueries({ queryKey: ["tokens"] });
+                  } catch (e) {
+                    toast.error(errMessage(e));
+                  }
                 }}
               >
                 Delete
@@ -455,7 +463,10 @@ function Tokens() {
         {created ? (
           <div className="space-y-3">
             <SecretBox value={created} />
-            <pre className="overflow-x-auto rounded-md bg-sunken p-3 font-mono text-[12px]">curl -H "Authorization: Bearer {created.slice(0, 12)}…" {location.origin}/api/v1/devices</pre>
+            <div>
+              <div className="mb-1 text-xs text-ink-3">Use it as a bearer token:</div>
+              <pre className="overflow-x-auto rounded-md bg-sunken p-3 font-mono text-[12px]">curl -H "Authorization: Bearer $GORGET_TOKEN" {location.origin}/api/v1/devices</pre>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">

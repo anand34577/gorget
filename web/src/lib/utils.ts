@@ -1,3 +1,4 @@
+import * as React from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -52,7 +53,35 @@ export const osLabel: Record<string, string> = {
 };
 
 export async function copy(text: string) {
-  await navigator.clipboard.writeText(text);
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    /* not a secure page, or permission denied: fall back below */
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  if (!ok) throw new Error("Couldn't copy. Select the text and copy it by hand.");
+}
+
+/** Warns before the tab is closed or reloaded while there are unsaved changes. */
+export function useUnsavedGuard(dirty: boolean) {
+  React.useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
 }
 
 export function download(filename: string, text: string, type = "text/plain") {

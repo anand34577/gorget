@@ -16,7 +16,10 @@ On Linux a router needs IP forwarding and NAT; Gorget turns both on while the de
 
 ### A router with plain WireGuard (OpenWrt and others)
 
-A router that can't run Gorget can still carry your home networks: create a WireGuard
+A router that can't run Gorget can still carry your home networks, and the Gorget apps on your
+laptop and phone reach them with no second VPN (the apps install a route for each network
+automatically). The console's **Connect a router or network** wizard does all of this for you.
+Manually:  create a WireGuard
 configuration for it (the OpenWrt format sets up the interface and firewall for you), then
 **Routes & exit nodes > Add networks behind a router**. Traffic to those networks then goes
 through the server's gateway to the router. Step-by-step: [your home network, from anywhere](homelab.md). Windows can forward between routed networks but cannot translate addresses, so use Linux or macOS for exit nodes.

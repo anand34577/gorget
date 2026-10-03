@@ -23,6 +23,12 @@ import (
 // nrptComment tags the DNS policy rules we create so we only ever remove our own.
 const nrptComment = "Gorget"
 
+// fwRuleName is the Windows Defender Firewall rule that lets other devices of the network
+// reach this computer through the tunnel. Windows blocks unsolicited inbound traffic
+// (including ping) on a new adapter, which looks like "I can ping them but they can't ping me".
+// Who may connect is decided by the access rules, which the client enforces itself.
+const fwRuleName = "Gorget (traffic from the VPN)"
+
 type windowsRouter struct {
 	log *slog.Logger
 
@@ -33,6 +39,7 @@ type windowsRouter struct {
 	fwKey    string
 	nrptOn   bool
 	nrptKey  string
+	allowKey string
 }
 
 func newRouter(log *slog.Logger) (Router, error) {
@@ -41,6 +48,7 @@ func newRouter(log *slog.Logger) (Router, error) {
 	}
 	// Rules from a daemon that crashed would keep steering names to a dead resolver.
 	removeNRPT() // synchronous: a late removal would delete the rules we add next
+	removeInboundAllow()
 	return &windowsRouter{log: log}, nil
 }
 
@@ -159,6 +167,9 @@ func (r *windowsRouter) configure(cfg client.TUNConfig) error {
 	}
 	if err := r.setDNS(cfg); err != nil {
 		r.log.Warn("DNS configuration failed", "err", err)
+	}
+	if err := r.setInboundAllow(cfg); err != nil {
+		r.log.Warn("couldn't open the Windows firewall for the VPN; other devices may be unable to reach this computer", "err", err)
 	}
 	if err := r.setKillSwitch(cfg); err != nil {
 		r.log.Warn("kill switch", "err", err)
@@ -285,6 +296,37 @@ func powershell(script string) error {
 	return nil
 }
 
+// ---------- inbound firewall rule ----------
+
+// setInboundAllow allows traffic arriving on the tunnel adapter from the network's own
+// addresses. The rule is limited to this adapter and the overlay ranges, so other networks
+// stay as protected as before.
+func (r *windowsRouter) setInboundAllow(cfg client.TUNConfig) error {
+	var remote []string
+	for _, p := range cfg.Overlay {
+		remote = append(remote, "'"+p.String()+"'") // netip.Prefix: digits, dots, colons and a slash only
+	}
+	if len(remote) == 0 {
+		return nil
+	}
+	key := strings.Join(remote, ",")
+	if key == r.allowKey {
+		return nil // PowerShell takes about a second; skip it when nothing changed
+	}
+	script := fmt.Sprintf("Remove-NetFirewallRule -DisplayName '%[1]s' -ErrorAction SilentlyContinue; "+
+		"New-NetFirewallRule -DisplayName '%[1]s' -Direction Inbound -Action Allow -Profile Any "+
+		"-InterfaceAlias '%[2]s' -RemoteAddress %[3]s | Out-Null", fwRuleName, InterfaceName, key)
+	if err := powershell(script); err != nil {
+		return err
+	}
+	r.allowKey = key
+	return nil
+}
+
+func removeInboundAllow() {
+	_ = powershell(fmt.Sprintf("Remove-NetFirewallRule -DisplayName '%s' -ErrorAction SilentlyContinue", fwRuleName))
+}
+
 // ---------- kill switch (Windows Filtering Platform) ----------
 
 func (r *windowsRouter) setKillSwitch(cfg client.TUNConfig) error {
@@ -321,6 +363,10 @@ func (r *windowsRouter) setKillSwitch(cfg client.TUNConfig) error {
 
 func (r *windowsRouter) teardownLocked() {
 	r.clearNRPT()
+	if r.allowKey != "" {
+		removeInboundAllow()
+		r.allowKey = ""
+	}
 	if r.fwOn {
 		firewall.DisableFirewall()
 		r.fwOn, r.fwKey = false, ""

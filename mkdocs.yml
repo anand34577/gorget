@@ -43,6 +43,7 @@ nav:
       - Domain routing: guide/domain-routing.md
       - Device health: guide/posture.md
       - Insights and connection history: guide/insights.md
+      - Notifications and sign-in alerts: guide/notifications.md
       - Email notifications: guide/email.md
       - Files and SSH: guide/files-and-ssh.md
       - Post-quantum protection: guide/post-quantum.md

@@ -9,6 +9,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn, copy } from "@/lib/utils";
+import { SuggestInput, type SuggestionLike } from "./suggest";
 
 // ---------- Button ----------
 
@@ -89,7 +90,7 @@ export function Field({ label, hint, error, children, className, htmlFor }: { la
   const hintId = `${auto}-hint`;
   let id = htmlFor;
   let control = children;
-  if (React.isValidElement<{ id?: string; "aria-describedby"?: string }>(children) && (children.type === Input || children.type === Select || children.type === Textarea || typeof children.type === "string")) {
+  if (React.isValidElement<{ id?: string; "aria-describedby"?: string }>(children) && (children.type === Input || children.type === Select || children.type === Textarea || children.type === "input" || children.type === "select" || children.type === "textarea")) {
     id = children.props.id ?? htmlFor ?? auto;
     control = React.cloneElement(children, { id, "aria-describedby": hint || error ? hintId : undefined });
   }
@@ -207,6 +208,7 @@ export function StatusDot({ online, pending, className }: { online: boolean; pen
   return (
     <span
       className={cn("inline-block size-2 shrink-0 rounded-full", pending ? "bg-straw" : online ? "bg-verdigris shadow-[0_0_0_3px] shadow-verdigris/20" : "bg-line-strong", className)}
+      role="img"
       aria-label={pending ? "Pending" : online ? "Online" : "Offline"}
     />
   );
@@ -400,13 +402,15 @@ export function ConfirmHost() {
 
 export const Tabs = TabsP.Root;
 export function TabsList({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <TabsP.List className={cn("mb-5 flex gap-1 overflow-x-auto border-b border-line", className)}>{children}</TabsP.List>;
+  // Wraps instead of scrolling: a scrolling tab strip shows scrollbars, and the line under it is drawn
+  // as an inset shadow so the active tab's underline can sit on it without overflowing the box.
+  return <TabsP.List className={cn("mb-5 flex flex-wrap gap-x-1 shadow-[inset_0_-1px_0_var(--line)]", className)}>{children}</TabsP.List>;
 }
 export function TabsTrigger({ value, children }: { value: string; children: React.ReactNode }) {
   return (
     <TabsP.Trigger
       value={value}
-      className="relative -mb-px whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-ink-3 hover:text-ink data-[state=active]:border-blued data-[state=active]:text-ink"
+      className="relative whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-ink-3 hover:text-ink data-[state=active]:border-blued data-[state=active]:text-ink"
     >
       {children}
     </TabsP.Trigger>
@@ -464,14 +468,48 @@ export function Tip({ content, children }: { content: React.ReactNode; children:
 }
 export const TipProvider = TipP.Provider;
 
-/** Editable list of strings (nameservers, CIDRs, domains). */
-export function ListEditor({ values, onChange, placeholder, mono = true }: { values: string[]; onChange: (v: string[]) => void; placeholder?: string; mono?: boolean }) {
+/** Editable list of strings (nameservers, CIDRs, domains). Suggestions fill the field as you type. */
+export function ListEditor({
+  values,
+  onChange,
+  placeholder,
+  mono = true,
+  suggestions,
+  validate,
+  disabled,
+}: {
+  values: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+  mono?: boolean;
+  suggestions?: SuggestionLike[];
+  /** Return an error message to refuse a value. */
+  validate?: (v: string) => string | null;
+  disabled?: boolean;
+}) {
   const [draft, setDraft] = React.useState("");
-  const add = () => {
-    const v = draft.trim();
-    if (v && !values.includes(v)) onChange([...values, v]);
+  const [err, setErr] = React.useState("");
+  const add = (raw = draft) => {
+    // Pasting "a, b c" adds three entries.
+    const parts = raw
+      .split(/[\s,]+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    if (!parts.length) return;
+    const next = [...values];
+    for (const v of parts) {
+      const bad = validate?.(v);
+      if (bad) {
+        setErr(bad);
+        return;
+      }
+      if (!next.includes(v)) next.push(v);
+    }
+    onChange(next);
     setDraft("");
+    setErr("");
   };
+  const pool = React.useMemo(() => (suggestions ?? []).filter((s) => !values.includes(typeof s === "string" ? s : s.value)), [suggestions, values]);
   return (
     <div className="space-y-2">
       {values.length > 0 && (
@@ -479,30 +517,38 @@ export function ListEditor({ values, onChange, placeholder, mono = true }: { val
           {values.map((v) => (
             <span key={v} className={cn("inline-flex items-center gap-1 rounded-md border border-line bg-surface-2 py-0.5 pl-2 pr-1 text-[12.5px]", mono && "font-mono")}>
               {v}
-              <button type="button" aria-label={`Remove ${v}`} className="rounded p-0.5 text-ink-3 hover:bg-sunken hover:text-ink" onClick={() => onChange(values.filter((x) => x !== v))}>
-                <X className="size-3" />
-              </button>
+              {!disabled && (
+                <button type="button" aria-label={`Remove ${v}`} className="rounded p-0.5 text-ink-3 hover:bg-sunken hover:text-ink" onClick={() => onChange(values.filter((x) => x !== v))}>
+                  <X className="size-3" />
+                </button>
+              )}
             </span>
           ))}
         </div>
       )}
-      <div className="flex gap-2">
-        <Input
-          value={draft}
-          placeholder={placeholder}
-          className={mono ? "font-mono" : undefined}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              add();
-            }
-          }}
-        />
-        <Button type="button" onClick={add} disabled={!draft.trim()}>
-          Add
-        </Button>
-      </div>
+      {!disabled && (
+        <>
+          <div className="flex gap-2">
+            <SuggestInput
+              value={draft}
+              placeholder={placeholder}
+              mono={mono}
+              suggestions={pool}
+              onChange={(v) => {
+                setDraft(v);
+                setErr("");
+              }}
+              onPick={(v) => add(v)}
+              onEnter={() => add()}
+              aria-invalid={!!err}
+            />
+            <Button type="button" onClick={() => add()} disabled={!draft.trim()}>
+              Add
+            </Button>
+          </div>
+          {err && <p className="text-xs text-oxide">{err}</p>}
+        </>
+      )}
     </div>
   );
 }

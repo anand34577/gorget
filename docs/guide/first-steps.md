@@ -61,4 +61,5 @@ a temporary password to pass on.
 - Require two-factor sign-in under **Settings → Sign-in**.
 - Connect your identity provider ([single sign-on and SCIM](../ops/sso.md)).
 - Let people request [temporary access](temporary-access.md) instead of keeping permanent rules.
+- Set up [notifications and sign-in alerts](notifications.md) (email, Gotify or ntfy).
 - Set up [backups](../ops/backups.md) and keep a copy of `master.key` somewhere safe.

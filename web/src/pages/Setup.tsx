@@ -85,7 +85,7 @@ export function Setup() {
               hint={
                 form.setup_token
                   ? "Filled in from the link the server printed."
-                  : "The server prints a setup link and token when it starts. Docker: docker compose logs gorget. Service: journalctl -u gorget-server. It is also saved as setup-token in the data directory."
+                  : "Open the setup link the server printed, or run gorget-server setup-link on the server (Docker: docker compose exec gorget gorget-server setup-link). The token is also saved as setup-token in the data directory."
               }
             >
               <Input required autoComplete="off" spellCheck={false} className="font-mono" value={form.setup_token} onChange={(e) => set("setup_token")(e.target.value.trim())} />

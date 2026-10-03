@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Globe, Plus, Router, Trash2, Waypoints } from "lucide-react";
+import { Globe, Laptop, Monitor, Plus, Router, Server, Trash2, Waypoints, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { del, errMessage, get, patch, post } from "@/lib/api";
 import type { Device, Route } from "@/lib/types";
 import { useSession } from "@/lib/session";
 import { Badge, Button, confirmAction, Dialog, EmptyState, ErrorNote, Field, Input, ListEditor, Mono, Note, PageHeader, Panel, PanelHeader, Select, StatusDot, Switch, Table, Td, Th, Tip } from "@/components/ui";
 import { useDeviceActions } from "./Devices";
+import { RouterWizard } from "./RouterWizard";
+import { Flow } from "@/components/flow";
 
 interface RouteRow extends Route {
   device_name: string;
@@ -30,6 +32,11 @@ export function RoutesPage() {
   const actions = useDeviceActions();
   const { data } = useQuery({ queryKey: ["routes"], queryFn: () => get<{ routes: RouteRow[]; exit_nodes: ExitRow[] }>("/routes") });
   const [adding, setAdding] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [wizard, setWizard] = useState(params.get("wizard") === "1");
+  useEffect(() => {
+    if (params.get("wizard") === "1") setWizard(true);
+  }, [params]);
 
   const update = async (r: RouteRow, body: Partial<Route>) => {
     try {
@@ -47,21 +54,34 @@ export function RoutesPage() {
         description="Devices can share their local network (a subnet route) or offer themselves as an exit node for internet traffic. Both need approval unless an auto-approver in the access rules covers them."
         actions={
           manage && (
-            <Button onClick={() => setAdding(true)}>
-              <Router /> Add networks behind a router
-            </Button>
+            <>
+              <Button onClick={() => setAdding(true)}>
+                <Router /> Add networks to a router
+              </Button>
+              <Button variant="primary" onClick={() => setWizard(true)}>
+                <Wand2 /> Connect a router or network
+              </Button>
+            </>
           )
         }
       />
       <SiteRouteDialog open={adding} onOpenChange={setAdding} />
+      <RouterWizard
+        open={wizard}
+        onOpenChange={(v) => {
+          setWizard(v);
+          if (!v && params.get("wizard")) setParams({}, { replace: true });
+        }}
+      />
       <div className="space-y-6">
+        {!!data?.routes.length && <RoutePicture routes={data.routes} />}
         <Panel>
           <PanelHeader
             title="Shared networks"
             description="When two devices share the same network, the one with the lowest priority number carries traffic, and the next takes over if it goes offline."
           />
           {!data?.routes.length ? (
-            <EmptyState icon={<Waypoints />} title="No shared networks">
+            <EmptyState icon={<Waypoints />} title="No shared networks" action={manage ? <Button variant="primary" onClick={() => setWizard(true)}><Wand2 /> Connect a router or network</Button> : undefined}>
               To reach your home or office network from anywhere, run <span className="font-mono">gorget set -advertise-routes 192.168.1.0/24</span> on one always-on Linux machine there (list VLANs too, separated by commas), then approve it here.
               Using a router with WireGuard (such as OpenWrt) instead? Choose <b>Add networks behind a router</b>.
             </EmptyState>
@@ -254,12 +274,52 @@ function SiteRouteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
           </Field>
         )}
         <Field label="Networks behind it" hint="Press Enter after each one, for example 192.168.1.0/24 for the LAN and 192.168.20.0/24 for a VLAN.">
-          <ListEditor values={cidrs} onChange={setCidrs} placeholder="192.168.1.0/24" />
+          <ListEditor
+            values={cidrs}
+            onChange={setCidrs}
+            placeholder="192.168.1.0/24"
+            suggestions={[{ value: "192.168.1.0/24", label: "Typical home LAN" }, { value: "192.168.0.0/24", label: "Typical home LAN (alternative)" }, { value: "10.0.0.0/24", label: "Typical office network" }]}
+            validate={(v) => (/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(v) ? null : `${v} isn't a network like 192.168.1.0/24`)}
+          />
         </Field>
         <Note>
           Who may use these networks is decided by your <Link to="/access" className="underline">access rules</Link>. On the router, allow forwarding from the WireGuard interface to these networks (the OpenWrt configuration download includes this).
         </Note>
       </div>
     </Dialog>
+  );
+}
+
+/** One line per sharing device: your devices, the server, the device, and the networks it carries. */
+function RoutePicture({ routes }: { routes: RouteRow[] }) {
+  const byDevice = new Map<string, RouteRow[]>();
+  for (const r of routes) (byDevice.get(r.device_id) ?? byDevice.set(r.device_id, []).get(r.device_id)!).push(r);
+  return (
+    <Panel>
+      <PanelHeader title="How your networks are reached" description="Traffic from your devices to these addresses travels through the Gorget server to the device that shares them." />
+      <div className="divide-y divide-line">
+        {[...byDevice.entries()].map(([id, rs]) => {
+          const live = rs.filter((r) => r.approved && r.enabled && r.advertised);
+          const online = rs[0].online;
+          return (
+            <div key={id} className="px-5 py-5">
+              <Flow
+                steps={[
+                  { icon: <Laptop />, title: "Your devices" },
+                  { icon: <Server />, title: "Gorget server" },
+                  { icon: <Router />, title: rs[0].device_name, sub: online ? "online" : "offline", state: online ? "ok" : "warn" },
+                  {
+                    icon: <Monitor />,
+                    title: rs.map((r) => r.cidr).join(", "),
+                    sub: live.length === rs.length ? (online ? "reachable" : "unreachable") : `${rs.length - live.length} need approval or are off`,
+                    state: online && live.length === rs.length ? "ok" : live.length ? "wait" : "off",
+                  },
+                ]}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
   );
 }

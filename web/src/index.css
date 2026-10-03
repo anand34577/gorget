@@ -143,6 +143,19 @@ body {
 .react-flow__attribution {
   display: none;
 }
+.react-flow__minimap {
+  background: var(--surface) !important;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.react-flow__minimap-mask {
+  fill: color-mix(in srgb, var(--bg) 70%, transparent) !important;
+}
+.react-flow__controls {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow) !important;
+}
 .react-flow__controls-button {
   background: var(--surface) !important;
   border-color: var(--line) !important;
@@ -162,4 +175,11 @@ body {
 }
 .cm-focused {
   outline: none !important;
+}
+
+/* Animated line in the traffic flow diagrams */
+@keyframes flowdash {
+  to {
+    background-position: 10px 0;
+  }
 }

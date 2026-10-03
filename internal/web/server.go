@@ -314,6 +314,10 @@ func (s *Server) Serve(ctx context.Context, h http.Handler) error {
 		MaxHeaderBytes:    64 << 10,
 		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelDebug),
 	}
+	// A device that loses its connection without closing it (a phone leaving Wi-Fi, a laptop
+	// put to sleep) would otherwise stay "online" until TCP gives up, minutes later. HTTP/2
+	// pings notice a dead connection within about half a minute.
+	srv.HTTP2 = &http.HTTP2Config{SendPingTimeout: 15 * time.Second, PingTimeout: 10 * time.Second}
 	var protos http.Protocols
 	protos.SetHTTP1(true)
 	protos.SetHTTP2(true)
