@@ -1,4 +1,5 @@
 // Thin typed client for the Gorget REST API (/api/v1).
+import { toast } from "sonner";
 
 export class ApiError extends Error {
   status: number;
@@ -27,17 +28,50 @@ export function onAuthError(fn: Listener) {
   };
 }
 
+// In-flight request counter: the shell shows a thin progress bar while anything is loading or saving.
+let pending = 0;
+const pendingListeners = new Set<() => void>();
+export const subscribePending = (fn: () => void) => {
+  pendingListeners.add(fn);
+  return () => {
+    pendingListeners.delete(fn);
+  };
+};
+export const pendingCount = () => pending;
+const track = (d: number) => {
+  pending += d;
+  pendingListeners.forEach((l) => l());
+};
+
+let offlineShown = false;
+function networkFailure(): ApiError {
+  if (!offlineShown) {
+    offlineShown = true;
+    toast.error("Can't reach the server", { id: "offline", description: "Check your connection. This page keeps trying.", duration: 8000 });
+    setTimeout(() => (offlineShown = false), 15000);
+  }
+  return new ApiError(0, "network", "Can't reach the server. Check your connection and try again.");
+}
+
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown; raw?: boolean } = {}): Promise<T> {
   const method = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
   const headers: Record<string, string> = { Accept: "application/json" };
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
-  const res = await fetch(`/api/v1${path}`, {
-    method,
-    headers,
-    credentials: "same-origin",
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  track(1);
+  let res: Response;
+  try {
+    res = await fetch(`/api/v1${path}`, {
+      method,
+      headers,
+      credentials: "same-origin",
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+  } catch {
+    throw networkFailure();
+  } finally {
+    track(-1);
+  }
   if (!res.ok) {
     let code = "http_" + res.status;
     let message = res.statusText || "Request failed";

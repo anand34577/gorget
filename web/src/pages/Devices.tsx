@@ -616,7 +616,7 @@ function DeviceDetail({ device: d, onClose }: { device: Device; onClose: () => v
             <KV k="Firewall" v={triState(d.firewall_on)} />
             <KV k="Added" v={fmtDate(d.created_at)} />
             <KV k="Key expires" v={d.key_expiry_disabled || !d.key_expires_at ? "Never" : `${fmtDate(d.key_expires_at)} (${relTime(d.key_expires_at)})`} />
-            <KV k="Endpoints" v={d.endpoints.length ? <Mono className="text-xs">{d.endpoints.join(", ")}</Mono> : "—"} />
+            <KV k="Endpoints" v={d.endpoints.length ? <span className="flex flex-col items-end gap-0.5">{d.endpoints.map((e) => <Mono key={e} className="text-xs">{e}</Mono>)}</span> : "—"} />
             <KV k="Home relay" v={d.home_relay || "—"} />
             <KV k="Traffic" v={`${fmtBytes(d.rx_bytes)} in · ${fmtBytes(d.tx_bytes)} out`} />
             <KV k="WireGuard key" v={<Mono className="text-xs">{d.wg_public_key.slice(0, 22)}…</Mono>} copy={d.wg_public_key} />

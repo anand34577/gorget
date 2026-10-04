@@ -70,7 +70,7 @@ run: server
 # ---------- Android (needs ANDROID_HOME, ANDROID_NDK_HOME, JDK 17, gomobile) ----------
 android-aar:
 	mkdir -p android/app/libs
-	gomobile bind -target=android/arm64,android/arm,android/amd64 -androidapi 26 -javapkg io.gorget 		-trimpath -ldflags "-s -w" -o android/app/libs/gorgetcore.aar ./mobile/gorgetcore
+	gomobile bind -target=android/arm64,android/arm,android/amd64 -androidapi 26 -javapkg io.gorget 		-trimpath -ldflags "-s -w -X github.com/anand34577/gorget/client.Version=$(patsubst v%,%,$(VERSION))" -o android/app/libs/gorgetcore.aar ./mobile/gorgetcore
 
 android: android-aar
 	cd android && ./gradlew assembleDebug

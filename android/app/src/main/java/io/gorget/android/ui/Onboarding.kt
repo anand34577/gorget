@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 /** Dark steel header with the lames, shared by the sign-in screens. */
 @Composable
 private fun BrandHeader(title: String, subtitle: String) {
+    LightStatusIcons()
     Box(
         Modifier
             .fillMaxWidth()
@@ -80,7 +81,7 @@ fun OnboardingScreen(onDone: () -> Unit = {}) {
             scope.launch {
                 runCatching { GorgetCore.setServer(url) }
                     .onSuccess { onDone() }
-                    .onFailure { error = it.message ?: "Couldn't reach that server." }
+                    .onFailure { error = it.message ?: "Couldn't reach that server."; Snack.error("Couldn't reach that server") }
                 busy = false
             }
         }
@@ -153,13 +154,16 @@ fun LoginScreen(status: Status) {
                         scope.launch {
                             runCatching { GorgetCore.startBrowserLogin() }
                                 .onSuccess { openUrl(it.url) }
-                                .onFailure { error = it.message }
+                                .onFailure { error = it.message; Snack.error(it.message ?: "Couldn't start sign-in") }
                             busy = false
                         }
                     },
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                ) { Text("Sign in with browser") }
+                ) {
+                    if (busy) { CircularProgressIndicator(Modifier.height(20.dp), strokeWidth = 2.dp, color = Color.White); Spacer(Modifier.padding(start = 10.dp)) }
+                    Text(if (busy) "Opening the sign-in page…" else "Sign in with browser")
+                }
             }
             if (!showKey) {
                 OutlinedButton(onClick = { showKey = true }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Use a setup key instead") }
@@ -174,14 +178,19 @@ fun LoginScreen(status: Status) {
                         busy = true
                         error = null
                         scope.launch {
-                            runCatching { GorgetCore.loginWithSetupKey(key) }.onFailure { error = it.message }
+                            runCatching { GorgetCore.loginWithSetupKey(key) }
+                                .onSuccess { Snack.show("Signed in") }
+                                .onFailure { error = it.message; Snack.error(it.message ?: "That key didn't work") }
                             busy = false
                         }
                     },
                     enabled = !busy && key.startsWith("gsk_"),
                     colors = ButtonDefaults.buttonColors(),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                ) { Text("Join with setup key") }
+                ) {
+                    if (busy) { CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp, color = Color.White); Spacer(Modifier.padding(start = 10.dp)) }
+                    Text(if (busy) "Joining…" else "Join with setup key")
+                }
             }
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = { ServerReset.request() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {

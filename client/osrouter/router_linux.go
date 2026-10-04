@@ -19,6 +19,7 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 
 	"github.com/anand34577/gorget/client"
+	"github.com/anand34577/gorget/internal/netfw"
 )
 
 // Policy routing (same idea as other mesh VPNs): our routes live in table 52;
@@ -52,6 +53,7 @@ type linuxRouter struct {
 	resolvBk []byte
 	nftOn    map[string]bool
 	nftLast  map[string]string // last ruleset loaded per table
+	fwdOpen  bool              // legacy FORWARD chain opened for our interface
 }
 
 func newRouter(log *slog.Logger) (Router, error) {
@@ -332,6 +334,10 @@ func (r *linuxRouter) setKillSwitch(cfg client.TUNConfig) error {
 
 func (r *linuxRouter) setForwarding(cfg client.TUNConfig) error {
 	if !cfg.Forward {
+		if r.fwdOpen {
+			netfw.Revoke(r.name)
+			r.fwdOpen = false
+		}
 		return r.nftDelete(nftFwd)
 	}
 	if err := os.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1"), 0o644); err != nil {
@@ -354,6 +360,7 @@ func (r *linuxRouter) setForwarding(cfg client.TUNConfig) error {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "table inet %s\ndelete table inet %s\ntable inet %s {\n", nftFwd, nftFwd, nftFwd)
 	sb.WriteString("\tchain forward {\n\t\ttype filter hook forward priority filter; policy accept;\n")
+	sb.WriteString("\t\ttcp flags syn tcp option maxseg size set rt mtu\n")
 	fmt.Fprintf(&sb, "\t\tiifname %q accept\n\t\toifname %q ct state established,related accept\n\t}\n", r.name, r.name)
 	sb.WriteString("\tchain postrouting {\n\t\ttype nat hook postrouting priority srcnat; policy accept;\n")
 	if len(v4) > 0 {
@@ -363,7 +370,12 @@ func (r *linuxRouter) setForwarding(cfg client.TUNConfig) error {
 		fmt.Fprintf(&sb, "\t\tip6 saddr { %s } oifname != %q masquerade\n", strings.Join(v6, ", "), r.name)
 	}
 	sb.WriteString("\t}\n}\n")
-	return r.nftApply(nftFwd, sb.String())
+	if err := r.nftApply(nftFwd, sb.String()); err != nil {
+		return err
+	}
+	netfw.Allow(r.name)
+	r.fwdOpen = true
+	return nil
 }
 
 func (r *linuxRouter) nftApply(table, rules string) error {
@@ -434,6 +446,10 @@ func (r *linuxRouter) BypassApp(pid int) error {
 func (r *linuxRouter) teardownLocked() {
 	_ = r.resetDNS()
 	_ = r.nftDelete(nftKill)
+	if r.fwdOpen {
+		netfw.Revoke(r.name)
+		r.fwdOpen = false
+	}
 	_ = r.nftDelete(nftFwd)
 	_ = r.nftDelete(nftApp)
 	_ = os.Remove("/sys/fs/cgroup/" + cgroupName) // only succeeds once its processes ended

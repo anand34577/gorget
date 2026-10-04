@@ -24,7 +24,7 @@ gorget up -server vpn.example.com -setup-key gsk_…
 
 For phones, routers and NAS boxes that only run the official WireGuard app, open **WireGuard apps → Add**
 in the console, then scan the QR code or download the config file. The keys are generated in your
-browser; the server never sees the private key. For OpenWrt there is a ready-made setup script.
+browser; the server never sees the private key. For routers configured with `uci` (OpenWrt and similar) there is a ready-made setup script.
 This needs the server's gateway (Linux or macOS server, UDP 51820 open).
 
 ## 2. Reach your devices

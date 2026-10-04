@@ -32,14 +32,14 @@ export function Flow({ steps, className }: { steps: FlowStep[]; className?: stri
         return (
           <React.Fragment key={i}>
             {i > 0 && (
-              <li aria-hidden className="flex w-10 items-center sm:w-14">
+              <li aria-hidden className="hidden w-10 items-center sm:flex sm:w-9">
                 <span
                   className={cn("h-0.5 w-full rounded", live ? "bg-verdigris" : "border-t-2 border-dashed border-line-strong", pending && "animate-pulse border-straw")}
                   style={live ? { backgroundImage: "linear-gradient(90deg, var(--verdigris) 50%, transparent 50%)", backgroundSize: "10px 2px", animation: "flowdash 0.9s linear infinite" } : undefined}
                 />
               </li>
             )}
-            <li className="flex w-32 flex-col items-center text-center sm:w-36">
+            <li className="flex w-1/2 flex-col items-center px-1 text-center sm:w-[8.5rem]">
               <span className={cn("grid size-12 place-items-center rounded-2xl border [&_svg]:size-5", ring[state])}>{s.icon}</span>
               <span className="mt-1.5 text-[12.5px] font-medium leading-tight">{s.title}</span>
               {s.sub && <span className="mt-0.5 text-[11px] leading-tight text-ink-3">{s.sub}</span>}
@@ -49,5 +49,44 @@ export function Flow({ steps, className }: { steps: FlowStep[]; className?: stri
         );
       })}
     </ol>
+  );
+}
+
+/**
+ * A collapsible "how this works" picture. Open the first time, then remembers whether the
+ * person closed it (per id), so it teaches without getting in the way.
+ */
+export function Explainer({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  const key = `gorget.explainer.${id}`;
+  const [open, setOpen] = React.useState(() => {
+    try {
+      return localStorage.getItem(key) !== "closed";
+    } catch {
+      return true;
+    }
+  });
+  return (
+    <details
+      open={open}
+      onToggle={(e) => {
+        const v = (e.currentTarget as HTMLDetailsElement).open;
+        setOpen(v);
+        try {
+          if (v) localStorage.removeItem(key);
+          else localStorage.setItem(key, "closed");
+        } catch {
+          /* private mode: just for this visit */
+        }
+      }}
+      className="group rounded-xl border border-line bg-surface"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3 text-[13px] font-medium [&::-webkit-details-marker]:hidden">
+        <span className="grid size-5 place-items-center rounded-full bg-blued-soft text-[11px] font-semibold text-blued">?</span>
+        {title}
+        <span className="ml-auto text-xs font-normal text-ink-3 group-open:hidden">Show</span>
+        <span className="ml-auto hidden text-xs font-normal text-ink-3 group-open:inline">Hide</span>
+      </summary>
+      <div className="border-t border-line px-5 py-5">{children}</div>
+    </details>
   );
 }

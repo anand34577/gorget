@@ -52,6 +52,7 @@ type Core struct {
 	setupToken string
 	gatewayID  string
 	gwPriv     wgtypes.Key
+	gwEP       gwEndpoints
 
 	// Geo maps public addresses to countries (local database; empty until one is loaded).
 	Geo        *geoip.DB

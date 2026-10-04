@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { Command } from "cmdk";
 import {
@@ -29,7 +29,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession, type Perm } from "@/lib/session";
 import { useLiveUpdates } from "@/lib/events";
 import { useTheme } from "@/lib/theme";
-import { get, post } from "@/lib/api";
+import { get, pendingCount, post, subscribePending } from "@/lib/api";
 import type { Device, UserView } from "@/lib/types";
 import { cn, roleLabel } from "@/lib/utils";
 import { Wordmark } from "./Logo";
@@ -251,6 +251,26 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
 
 const pageTitles: Record<string, string> = { "/account": "Account & security", "/device": "Approve a device" };
 
+/** A thin bar across the top while requests are in flight (shown only after a short delay, so quick ones don't flicker). */
+function TopBar() {
+  const n = useSyncExternalStore(subscribePending, pendingCount);
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (n === 0) {
+      setShow(false);
+      return;
+    }
+    const t = setTimeout(() => setShow(true), 300);
+    return () => clearTimeout(t);
+  }, [n]);
+  if (!show) return null;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-0.5 overflow-hidden bg-blued/15" role="progressbar" aria-label="Loading">
+      <div className="topbar-run h-full rounded-full bg-blued" />
+    </div>
+  );
+}
+
 export function Shell() {
   useLiveUpdates();
   const { me } = useSession();
@@ -310,6 +330,7 @@ export function Shell() {
 
   return (
     <div className="flex h-full">
+      <TopBar />
       <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-bg lg:flex">{sidebar}</aside>
       {mobileNav && (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileNav(false)}>

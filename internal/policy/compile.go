@@ -214,6 +214,9 @@ func (p *Policy) Compile(env Env) *Compiled {
 	for _, n := range env.Nodes {
 		c.private = append(c.private, n.Routes...)
 	}
+	// Never forwardable through an exit node, whatever the rule says: loopback and link-local
+	// space includes the cloud metadata service (169.254.169.254) of a VPS exit node.
+	c.private = append(c.private, neverForwarded...)
 	c.private = dedupe(c.private)
 	return c
 }
@@ -745,4 +748,12 @@ func dedupe(ps []netip.Prefix) []netip.Prefix {
 		}
 	}
 	return out
+}
+
+// neverForwarded are destinations exit-node rules don't cover.
+var neverForwarded = []netip.Prefix{
+	netip.MustParsePrefix("127.0.0.0/8"),
+	netip.MustParsePrefix("169.254.0.0/16"),
+	netip.MustParsePrefix("::1/128"),
+	netip.MustParsePrefix("fe80::/10"),
 }

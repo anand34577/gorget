@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.5.1
+
+### Fixed
+- **Exit node through the server's gateway: uploads worked, nothing came back.** The apps never
+  found a path to the gateway: it speaks plain WireGuard, so there is no path discovery, and
+  every packet fell back to the relay, which can't reach it. The apps now use the gateway's
+  published address directly. The same fix makes **plain WireGuard devices reachable** from the
+  apps and from each other.
+- The gateway's public address is resolved by the server, so a host name works as the endpoint.
+- ICMP errors (destination unreachable, packet too big) for your own connections are no longer
+  dropped. IPv6 attempts that an exit node can't carry now fail fast instead of hanging, and
+  large downloads no longer stall on paths with a smaller MTU. Forwarders also clamp TCP MSS.
+- Linux exit nodes and the gateway work on machines where Docker or ufw leave the FORWARD chain
+  on DROP.
+- "Allow local network access" no longer pulls the network's own addresses (IPv6 overlay, or an
+  IPv4 range inside 10.x or 192.168.x) and the in-tunnel resolver out of the tunnel.
+- Exit nodes never forward to loopback or link-local addresses (this includes a cloud
+  provider's metadata service).
+- **Android showed 0.4.0 after every update:** the version was typed into the build files. The app
+  and its Go core now take the version from the release tag, so they always show what was built.
+- **Overview:** the overlapping device plates under "Your network at a glance" are now a grid of
+  tiles with name, address and status.
+- **Android:** a redesigned "Choose apps" screen (loading state, selected apps first, clear all,
+  explicit Apply with progress, a prompt before leaving with unapplied changes). Snackbars
+  report what happened (connected, exit node changed, copied, errors), spinners show on
+  Connect, the exit-node picker, sign-in and sign-out, and a progress bar shows while settings
+  apply. An exit node that sends data but gets nothing back now says so.
+- **Console:** a thin progress bar while anything loads or saves, a message when the server
+  can't be reached, and confirmations when routes are approved, switched or removed.
+
+- **Console, found by reviewing every page at desktop and phone width, in light and dark:**
+  checkboxes drew as solid dark squares (now one themed style); tables were squeezed into
+  unreadable columns on phones (they scroll sideways now); traffic diagrams wrapped awkwardly in
+  dialogs and on phones; completed "Getting started" steps took half the overview (they fold away).
+- **New pictures that explain things:** how access rules work, how WireGuard apps connect, how a
+  DNS name is looked up, and the path of an exit node. Each can be closed and stays closed.
+- **Android:** the sign-in header no longer hides the clock and status icons; "Choose apps" now
+  clears "Unsaved changes" after Apply and no longer reshuffles the list while you tick apps.
+
+### Changed
+- The console no longer talks about one router brand. Routers get a standard configuration file
+  with notes for common platforms, plus an optional `uci` script.
+- The overview explains setup problems in plain words: an exit node nobody may use, or a gateway
+  address that can't be reached from outside.
+
 ## 0.5.0
 
 ### One app for everything at home

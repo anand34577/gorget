@@ -3,7 +3,6 @@ package io.gorget.android.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -200,7 +199,7 @@ fun Divider() {
 fun copyToClipboard(ctx: Context, label: String, text: String) {
     val cm = ctx.getSystemService(ClipboardManager::class.java)
     cm.setPrimaryClip(ClipData.newPlainText(label, text))
-    Toast.makeText(ctx, "Copied $label", Toast.LENGTH_SHORT).show()
+    Snack.show("Copied $label")
 }
 
 fun Modifier.describe(text: String) = this.semantics { contentDescription = text }

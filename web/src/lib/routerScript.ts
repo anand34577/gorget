@@ -1,10 +1,10 @@
 /**
- * toOpenWrt converts a wg-quick configuration into a shell script of `uci` commands
- * for an OpenWrt router (22.03 or newer). It creates a "gorget" WireGuard interface,
+ * toRouterScript converts a wg-quick configuration into a shell script of `uci` commands
+ * for routers configured with uci (OpenWrt-style firmware, 22.03 or newer). It creates a "gorget" WireGuard interface,
  * a firewall zone for it, and forwarding between that zone and the LAN, so devices on
  * Gorget reach the router's networks and the reverse.
  */
-export interface OpenWrtOptions {
+export interface RouterScriptOptions {
   /** Let Gorget devices open the router's own SSH and web interface (the access rules still decide who). */
   manage?: boolean;
   /**
@@ -14,7 +14,7 @@ export interface OpenWrtOptions {
   masquerade?: boolean;
 }
 
-export function toOpenWrt(name: string, conf: string, opts: OpenWrtOptions = {}): string {
+export function toRouterScript(name: string, conf: string, opts: RouterScriptOptions = {}): string {
   const iface: Record<string, string> = {};
   const peer: Record<string, string> = {};
   let section: Record<string, string> | null = null;
@@ -39,12 +39,12 @@ export function toOpenWrt(name: string, conf: string, opts: OpenWrtOptions = {})
 
   const out: string[] = [
     "#!/bin/sh",
-    `# Gorget WireGuard setup for OpenWrt: ${name}`,
+    `# Gorget WireGuard setup (uci router): ${name}`,
     "#",
-    "# 1. On the router, install WireGuard once:",
-    "#      opkg update && opkg install wireguard-tools luci-proto-wireguard",
+    "# 1. Make sure WireGuard is installed on the router (many have it built in;",
+    "#    otherwise install the wireguard-tools package with its package manager).",
     "# 2. Run this script on the router, for example:",
-    `#      ssh root@192.168.1.1 'sh -s' < ${name}-openwrt.sh`,
+    `#      ssh root@192.168.1.1 'sh -s' < ${name}-router.sh`,
     "# 3. In the Gorget console, open Routes & exit nodes > Add networks behind a router,",
     "#    choose this configuration and add your LAN and VLAN ranges.",
     "#",

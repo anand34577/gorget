@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"sort"
@@ -84,6 +85,7 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	if p.can(permRead) {
 		resp["gateway"] = a.gw.Status()
+		resp["checks"] = a.healthChecks(s)
 		resp["relay"] = a.sys.RelayStats()
 		recent, _ := a.core.Store.ListAudit(r.Context(), store.AuditFilter{Limit: 8})
 		if recent == nil {
@@ -748,4 +750,54 @@ func (a *API) clusterInstances() []core.ClusterInstance {
 		return l
 	}
 	return []core.ClusterInstance{}
+}
+
+// healthCheck is a setup problem the console explains in plain words.
+type healthCheck struct {
+	Level string `json:"level"` // warn or danger
+	Text  string `json:"text"`
+	To    string `json:"to"`
+}
+
+// healthChecks finds configurations that look right but can't work.
+func (a *API) healthChecks(s *core.Snapshot) []healthCheck {
+	out := []healthCheck{}
+	exits, users := 0, 0
+	for id, d := range s.Devices {
+		if !s.Active[id] {
+			continue
+		}
+		if d.ExitAdvertised && d.ExitApproved {
+			exits++
+		}
+		if d.Kind != store.KindGateway && s.Compiled.CanUseExitNode(id) {
+			users++
+		}
+	}
+	if exits > 0 && users == 0 {
+		out = append(out, healthCheck{"warn", "An exit node is set up, but no access rule lets any device use it (needs a rule to autogroup:internet)", "/access"})
+	}
+	if a.core.Cfg.Gateway.Enabled && a.gw.Status().Running {
+		eps := a.core.GatewayEndpoints()
+		switch {
+		case len(eps) == 0:
+			out = append(out, healthCheck{"danger", "The gateway's public address can't be resolved, so apps can't reach it (check the gateway endpoint in the server settings)", "/settings?tab=system"})
+		case allPrivate(eps):
+			out = append(out, healthCheck{"warn", "The gateway's address (" + eps[0] + ") is a private address. Phones and laptops outside your network can't reach it; set the public address in the server settings", "/settings?tab=system"})
+		}
+	}
+	return out
+}
+
+func allPrivate(eps []string) bool {
+	for _, e := range eps {
+		ap, err := netip.ParseAddrPort(e)
+		if err != nil {
+			return false
+		}
+		if ip := ap.Addr(); !(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()) {
+			return false
+		}
+	}
+	return len(eps) > 0
 }

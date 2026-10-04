@@ -1,5 +1,5 @@
 name: release
-# Push a tag like v0.4.0 and everything below builds and lands on the GitHub release.
+# Push a tag like v0.5.1 and everything below builds and lands on the GitHub release.
 # "Run workflow" on the Actions tab does a dry run: builds everything, publishes nothing.
 on:
   push:
@@ -130,7 +130,7 @@ jobs:
             echo "keyPassword=$KEY_PASSWORD"
           } > android/keystore.properties
       - name: Build release APKs
-        run: cd android && ./gradlew --no-daemon assembleRelease
+        run: cd android && ./gradlew --no-daemon assembleRelease -PversionName="${VERSION#v}"
       - name: Collect
         run: |
           mkdir -p dist

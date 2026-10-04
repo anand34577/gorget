@@ -336,7 +336,31 @@ func (c *Conn) Shutdown() {
 	_ = c.Close()
 }
 
+// static returns the fixed address of a peer that has no disco key: the server's
+// gateway, which is plain WireGuard. There is nothing to probe, so the address the
+// server published is the path (IPv4 first). Callers hold c.mu.
+func (p *peer) static() (netip.AddrPort, bool) {
+	if p.info.DiscoKey != (Key{}) {
+		return netip.AddrPort{}, false
+	}
+	var v6 netip.AddrPort
+	for _, ep := range p.info.Endpoints {
+		ep = netip.AddrPortFrom(ep.Addr().Unmap(), ep.Port())
+		switch {
+		case !ep.IsValid():
+		case ep.Addr().Is4():
+			return ep, true
+		case !v6.IsValid():
+			v6 = ep
+		}
+	}
+	return v6, v6.IsValid()
+}
+
 func (p *peer) direct(now time.Time) (netip.AddrPort, bool) {
+	if ap, ok := p.static(); ok {
+		return ap, true
+	}
 	if p.best.IsValid() && now.Sub(p.bestPong) < trustBestFor {
 		return p.best, true
 	}
@@ -542,7 +566,7 @@ func (c *Conn) endpointForSrc(src netip.AddrPort) conn.Endpoint {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for k, p := range c.peers {
-		if p.best == src {
+		if st, ok := p.static(); p.best == src || (ok && st == src) {
 			p.lastActive = time.Now()
 			return &peerEP{key: k}
 		}
@@ -833,6 +857,9 @@ func (c *Conn) loop() {
 				continue // idle: don't spend battery
 			}
 			if _, ok := p.direct(now); ok {
+				if p.info.DiscoKey == (Key{}) {
+					continue // a fixed path needs no probing
+				}
 				if now.Sub(p.bestPong) > heartbeat && now.Sub(p.lastDiscover) > heartbeat {
 					p.lastDiscover = now
 					heartbeats = append(heartbeats, k)

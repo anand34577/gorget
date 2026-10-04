@@ -321,6 +321,7 @@ func BuildRuleset(iface, egress string, v *core.GatewayView) string {
 
 	// Forwarding: default deny for traffic entering or leaving the gateway interface.
 	fmt.Fprintf(&b, "\tchain forward {\n\t\ttype filter hook forward priority filter; policy accept;\n")
+	b.WriteString("\t\ttcp flags syn tcp option maxseg size set rt mtu\n") // a smaller MTU on the way would stall big downloads
 	fmt.Fprintf(&b, "\t\tiifname %q jump from_overlay\n", iface)
 	fmt.Fprintf(&b, "\t\toifname %q jump to_overlay\n\t}\n", iface)
 

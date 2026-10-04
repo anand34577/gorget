@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import QRCode from "qrcode";
-import { toOpenWrt } from "@/lib/openwrt";
-import { Ban, Cable, Download, FileText, Globe, MoreHorizontal, Pencil, Plus, RefreshCw, Router, Split, Trash2 } from "lucide-react";
+import { toRouterScript } from "@/lib/routerScript";
+import { Ban, Cable, Download, FileText, Globe, Laptop, MoreHorizontal, Monitor, Pencil, Plus, RefreshCw, Router, Server, Split, Trash2 } from "lucide-react";
+import { Explainer, Flow } from "@/components/flow";
 import { toast } from "sonner";
 import { errMessage, get, post } from "@/lib/api";
 import type { Device, UserView } from "@/lib/types";
@@ -97,6 +98,21 @@ export function WireGuardApps() {
         }
       />
       {!me.features.gateway && <div className="mb-4"><Note tone="warn">The gateway is disabled in the server configuration, so WireGuard apps can't connect.</Note></div>}
+      <div className="mb-4">
+        <Explainer id="wireguard" title="How WireGuard apps connect">
+          <Flow
+            steps={[
+              { icon: <Cable />, title: "WireGuard app", sub: "phone, router, NAS" },
+              { icon: <Server />, title: "Gorget gateway", sub: me.features.gateway ? "enforces access rules" : "disabled", state: me.features.gateway ? "ok" : "warn" },
+              { icon: <Laptop />, title: "Gorget devices", sub: "reached by name or address" },
+              { icon: <Monitor />, title: "Shared networks", sub: "home or office, if shared" },
+            ]}
+          />
+          <p className="mt-4 text-center text-xs text-ink-3">
+            Pick <b>Private network only</b> to reach your devices and networks while everything else uses the normal connection, or <b>Everything</b> to send all traffic through the gateway.
+          </p>
+        </Explainer>
+      </div>
       <Panel>
         {all.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
@@ -495,12 +511,12 @@ function CreateDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v:
 
 function ConfigView({ name, config: wgConfig }: { name: string; config: string }) {
   const [qr, setQr] = useState("");
-  const [format, setFormat] = useState<"wg" | "openwrt">("wg");
+  const [format, setFormat] = useState<"wg" | "script">("wg");
   const [manage, setManage] = useState(true);
   const [masq, setMasq] = useState(false);
   const hasKey = !wgConfig.includes("<REPLACE_WITH_YOUR_PRIVATE_KEY>");
-  const config = format === "openwrt" ? toOpenWrt(name, wgConfig, { manage, masquerade: masq }) : wgConfig;
-  const file = format === "openwrt" ? `${name}-openwrt.sh` : `${name}.conf`;
+  const config = format === "script" ? toRouterScript(name, wgConfig, { manage, masquerade: masq }) : wgConfig;
+  const file = format === "script" ? `${name}-router.sh` : `${name}.conf`;
   useEffect(() => {
     if (hasKey) QRCode.toDataURL(wgConfig, { margin: 1, width: 260, errorCorrectionLevel: "M" }).then(setQr);
   }, [wgConfig, hasKey]);
@@ -524,7 +540,7 @@ function ConfigView({ name, config: wgConfig }: { name: string; config: string }
             {(
               [
                 ["wg", "WireGuard app / wg-quick"],
-                ["openwrt", "OpenWrt router"],
+                ["script", "Router script (uci)"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -541,7 +557,7 @@ function ConfigView({ name, config: wgConfig }: { name: string; config: string }
           </div>
           <CopyButton value={config} />
         </div>
-        {format === "openwrt" && (
+        {format === "script" && (
           <div className="mb-3 space-y-2 rounded-lg border border-line bg-surface-2 p-3">
             <p className="text-xs text-ink-2">
               A script of <Mono className="text-[11px]">uci</Mono> commands: it sets up the interface, a firewall zone and LAN forwarding. Afterwards add the router's networks under Routes &amp; exit nodes.

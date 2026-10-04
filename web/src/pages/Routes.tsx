@@ -42,6 +42,7 @@ export function RoutesPage() {
     try {
       await patch(`/routes/${r.id}`, body);
       qc.invalidateQueries({ queryKey: ["routes"] });
+      toast.success(body.approved === true ? `Approved ${r.cidr}` : body.approved === false ? `Approval removed from ${r.cidr}` : body.enabled === true ? `${r.cidr} switched on` : body.enabled === false ? `${r.cidr} switched off` : "Route updated");
     } catch (e) {
       toast.error(errMessage(e));
     }
@@ -83,7 +84,7 @@ export function RoutesPage() {
           {!data?.routes.length ? (
             <EmptyState icon={<Waypoints />} title="No shared networks" action={manage ? <Button variant="primary" onClick={() => setWizard(true)}><Wand2 /> Connect a router or network</Button> : undefined}>
               To reach your home or office network from anywhere, run <span className="font-mono">gorget set -advertise-routes 192.168.1.0/24</span> on one always-on Linux machine there (list VLANs too, separated by commas), then approve it here.
-              Using a router with WireGuard (such as OpenWrt) instead? Choose <b>Add networks behind a router</b>.
+              Using a router with WireGuard (MikroTik, pfSense, GL.iNet and others) instead? Choose <b>Add networks behind a router</b>.
             </EmptyState>
           ) : (
             <Table>
@@ -153,6 +154,7 @@ export function RoutesPage() {
                             try {
                               await del(`/routes/${r.id}`);
                               qc.invalidateQueries({ queryKey: ["routes"] });
+                              toast.success(`Removed ${r.cidr}`);
                             } catch (e) {
                               toast.error(errMessage(e));
                             }
@@ -171,6 +173,16 @@ export function RoutesPage() {
 
         <Panel>
           <PanelHeader title="Exit nodes" description="People choose an exit node in their Gorget app to send all internet traffic through it. Access rules decide who may use them (autogroup:internet)." />
+          <div className="border-b border-line px-5 py-5">
+            <Flow
+              steps={[
+                { icon: <Laptop />, title: "A device", sub: "picks an exit node" },
+                { icon: <Server />, title: "Gorget tunnel", sub: "encrypted" },
+                { icon: <Router />, title: "Exit node", sub: data?.exit_nodes.some((e) => e.approved) ? "approved" : "needs approval", state: data?.exit_nodes.some((e) => e.approved) ? "ok" : "wait" },
+                { icon: <Globe />, title: "The internet", sub: "sees the exit node's address" },
+              ]}
+            />
+          </div>
           {!data?.exit_nodes.length ? (
             <EmptyState icon={<Globe />} title="No exit nodes">
               Run <span className="font-mono">gorget up --advertise-exit-node</span> on a server, or turn on the gateway exit node in Settings.
@@ -203,7 +215,7 @@ export function RoutesPage() {
 
 /**
  * SiteRouteDialog attaches local networks to a standard WireGuard device, typically a
- * home router (OpenWrt, MikroTik, pfSense). Gorget apps share networks themselves.
+ * home router (MikroTik, pfSense, GL.iNet and others). Gorget apps share networks themselves.
  */
 function SiteRouteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
@@ -260,7 +272,7 @@ function SiteRouteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
         {err && <ErrorNote>{err}</ErrorNote>}
         {list.length === 0 && !devs.isLoading ? (
           <Note tone="warn">
-            First create a WireGuard configuration for the router in <Link to="/wireguard" className="underline">WireGuard apps</Link> (choose the OpenWrt format there), then come back.
+            First create a WireGuard configuration for the router in <Link to="/wireguard" className="underline">WireGuard apps</Link> (choose a router format there), then come back.
           </Note>
         ) : (
           <Field label="Router" hint="The WireGuard configuration your router uses.">
@@ -283,7 +295,7 @@ function SiteRouteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
           />
         </Field>
         <Note>
-          Who may use these networks is decided by your <Link to="/access" className="underline">access rules</Link>. On the router, allow forwarding from the WireGuard interface to these networks (the OpenWrt configuration download includes this).
+          Who may use these networks is decided by your <Link to="/access" className="underline">access rules</Link>. On the router, allow forwarding from the WireGuard interface to these networks (the router script download includes this).
         </Note>
       </div>
     </Dialog>
