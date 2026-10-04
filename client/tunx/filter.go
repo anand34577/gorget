@@ -190,3 +190,73 @@ func (c *Conntrack) IsReply(p packet) bool {
 	}
 	return true
 }
+
+// IsErrorFor reports whether p is an ICMP error (unreachable, packet too big, time
+// exceeded, bad parameter) about a flow this device opened. Without these, IPv6 attempts
+// that the exit node can't carry hang instead of failing fast, and path-MTU discovery
+// breaks (large downloads stall).
+func (c *Conntrack) IsErrorFor(p packet, b []byte) bool {
+	if (p.proto != protoICMP && p.proto != protoICMPv6) || p.fragment || len(b) < p.payloadOff+8+20 {
+		return false
+	}
+	t := b[p.payloadOff:]
+	switch p.proto {
+	case protoICMP:
+		if t[0] != 3 && t[0] != 4 && t[0] != 11 && t[0] != 12 {
+			return false
+		}
+	default:
+		if t[0] < 1 || t[0] > 4 {
+			return false
+		}
+	}
+	in, ok := parseInner(t[8:])
+	if !ok {
+		return false
+	}
+	// The quoted packet is one we sent: swap it so it looks like a reply to that flow.
+	return c.IsReply(packet{src: in.dst, dst: in.src, proto: in.proto, sport: in.dport, dport: in.sport, hasPorts: in.hasPorts})
+}
+
+// parseInner reads the packet quoted inside an ICMP error. It may be cut short, so only
+// the addresses, protocol and (when present) the first four transport bytes are needed.
+func parseInner(b []byte) (packet, bool) {
+	if len(b) < 20 {
+		return packet{}, false
+	}
+	var p packet
+	var t []byte
+	switch b[0] >> 4 {
+	case 4:
+		ihl := int(b[0]&0x0f) * 4
+		if ihl < 20 || len(b) < ihl {
+			return p, false
+		}
+		p.src = netip.AddrFrom4([4]byte(b[12:16]))
+		p.dst = netip.AddrFrom4([4]byte(b[16:20]))
+		p.proto, t = b[9], b[ihl:]
+	case 6:
+		if len(b) < 40 {
+			return p, false
+		}
+		p.src = netip.AddrFrom16([16]byte(b[8:24]))
+		p.dst = netip.AddrFrom16([16]byte(b[24:40]))
+		p.proto, t = b[6], b[40:]
+	default:
+		return p, false
+	}
+	switch p.proto {
+	case protoTCP, protoUDP:
+		if len(t) < 4 {
+			return p, false
+		}
+		p.sport, p.dport = uint16(t[0])<<8|uint16(t[1]), uint16(t[2])<<8|uint16(t[3])
+		p.hasPorts = true
+	case protoICMP, protoICMPv6:
+		if len(t) >= 6 && isEcho(p.proto, t[0]) {
+			id := uint16(t[4])<<8 | uint16(t[5])
+			p.sport, p.dport = id, id
+		}
+	}
+	return p, true
+}

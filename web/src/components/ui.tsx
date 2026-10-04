@@ -289,7 +289,7 @@ export function SecretBox({ value, caption }: { value: string; caption?: string 
 export function Table({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full border-collapse text-left text-[13px]">{children}</table>
+      <table className="w-full min-w-[620px] border-collapse text-left text-[13px]">{children}</table>
     </div>
   );
 }

@@ -568,7 +568,10 @@ func tunConfig(nm *pb.NetworkMap, prefs Prefs, exit *pb.Peer) TUNConfig {
 		cfg.KillSwitch = prefs.KillSwitch || nm.GetSettings().GetKillSwitchEnforced()
 		cfg.Routes = append(cfg.Routes, netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0"))
 		if prefs.AllowLAN {
-			cfg.ExcludedRoutes = append(cfg.ExcludedRoutes, lanRanges...)
+			// The network's own range can sit inside a "local" range (IPv6 overlays are
+			// always unique-local; IPv4 ones may be 10.x), and so can the in-tunnel resolver.
+			keep := append(append([]netip.Prefix{}, cfg.Overlay...), netip.PrefixFrom(tunx.DNSv4, 32), netip.PrefixFrom(tunx.DNSv6, 128))
+			cfg.ExcludedRoutes = append(cfg.ExcludedRoutes, subtractPrefixes(lanRanges, keep)...)
 		}
 	}
 	if d := nm.GetDns(); prefs.UseDNS && d != nil {

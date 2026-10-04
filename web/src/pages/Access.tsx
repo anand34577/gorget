@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
-import { ArrowRight, CheckCircle2, CircleSlash, FlaskConical, GripVertical, History, Pencil, Plus, Trash2, Wand2, XCircle } from "lucide-react";
+import { ArrowRight, Ban, CheckCircle2, CircleSlash, FlaskConical, GripVertical, History, Pencil, Plus, Server, ShieldCheck, Trash2, Users, Wand2, XCircle } from "lucide-react";
+import { Explainer, Flow } from "@/components/flow";
 import { toast } from "sonner";
 import { ApiError, errMessage, get, post, put } from "@/lib/api";
 import type { Device, Group, Policy, PolicyAnalysis, PolicyRule, PolicyVersion, UserView } from "@/lib/types";
@@ -243,6 +244,19 @@ function VisualRules({ policy, onChange, readOnly }: { policy: Policy; onChange:
   };
   return (
     <div className="space-y-3">
+      <Explainer id="access" title="How access rules work">
+        <Flow
+          steps={[
+            { icon: <Users />, title: "Who", sub: "people, groups, tags, devices" },
+            { icon: <ShieldCheck />, title: "May reach", sub: "each rule allows one thing" },
+            { icon: <Server />, title: "What", sub: "devices, networks, the internet, ports" },
+            { icon: <Ban />, title: "Everything else", sub: "blocked", state: "off" },
+          ]}
+        />
+        <p className="mt-4 text-center text-xs text-ink-3">
+          Rules only add access, and their order doesn't matter. To let devices use an exit node, add a rule to <b>The internet (exit nodes)</b>. Use <b>Try access</b> to check a change before you rely on it.
+        </p>
+      </Explainer>
       <Note>Editing rules here rewrites the policy file and drops comments. Order doesn't change what's allowed, but it helps readability.</Note>
       {rules.length === 0 && <Panel className="px-5 py-8 text-center text-[13px] text-ink-3">No rules yet, so nothing can reach anything.</Panel>}
       {rules.map((r, i) => (

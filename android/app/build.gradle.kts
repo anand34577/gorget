@@ -16,6 +16,12 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// The app version comes from the release tag (-PversionName=1.2.3, or $VERSION) so the app and
+// its Go core always show the version that was built; the version code follows from it.
+val appVersion = (findProperty("versionName") as String? ?: System.getenv("VERSION") ?: "")
+    .removePrefix("v").takeIf { Regex("""\d+\.\d+\.\d+""").matches(it) } ?: "0.5.1"
+val appVersionCode = appVersion.split(".").let { (a, b, c) -> a.toInt() * 10000 + b.toInt() * 100 + c.toInt() }
+
 android {
     namespace = "io.gorget.android"
     compileSdk = 37
@@ -24,8 +30,8 @@ android {
         applicationId = "io.gorget.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = appVersionCode
+        versionName = appVersion
     }
 
     signingConfigs {

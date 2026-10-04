@@ -22,6 +22,7 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/anand34577/gorget/internal/config"
+	"github.com/anand34577/gorget/internal/netfw"
 )
 
 type linuxDP struct {
@@ -191,6 +192,7 @@ func (d *linuxDP) ApplyFirewall(ruleset string) error {
 	if err != nil {
 		return fmt.Errorf("nft: %v: %s", err, strings.TrimSpace(string(out)))
 	}
+	netfw.Allow(d.cfg.Interface)
 	return nil
 }
 
@@ -204,6 +206,7 @@ func (d *linuxDP) Peers() ([]wgtypes.Peer, error) {
 
 func (d *linuxDP) Close() error {
 	var errs []error
+	netfw.Revoke(d.cfg.Interface)
 	if out, err := exec.Command("nft", "delete", "table", "inet", "gorget").CombinedOutput(); err != nil && !strings.Contains(string(out), "No such file") {
 		errs = append(errs, fmt.Errorf("remove firewall: %s", strings.TrimSpace(string(out))))
 	}

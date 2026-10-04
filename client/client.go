@@ -36,7 +36,7 @@ import (
 )
 
 // Version of the client core.
-var Version = "0.4.0"
+var Version = "0.5.1"
 
 // Platform adapts the client to an operating system.
 type Platform interface {

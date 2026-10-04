@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -78,6 +79,7 @@ fun HomeScreen(status: Status, onConnect: () -> Unit, onDisconnect: () -> Unit, 
                 IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings", tint = s.ink2) }
             }
         }
+        item { TopProgress(status.state == Status.STATE_CONNECTING, Modifier.padding(top = 4.dp)) }
         item { Hero(status, onConnect, onDisconnect) }
         status.error?.takeIf { status.state != Status.STATE_RUNNING }?.let { item { Banner(it, Tone.DANGER, Modifier.padding(top = 12.dp)) } }
         status.notice?.let { item { Banner(it, Tone.BLUED, Modifier.padding(top = 12.dp)) } }
@@ -169,12 +171,19 @@ private fun Hero(status: Status, onConnect: () -> Unit, onDisconnect: () -> Unit
         Spacer(Modifier.height(18.dp))
         val active = status.isActive
         if (status.state != Status.STATE_DISABLED) {
+            val connecting = status.state == Status.STATE_CONNECTING
             Button(
                 onClick = if (active) onDisconnect else onConnect,
                 colors = if (active) ButtonDefaults.buttonColors(containerColor = s.sunken, contentColor = s.ink) else ButtonDefaults.buttonColors(),
                 modifier = Modifier.widthIn(min = 220.dp).height(54.dp),
                 shape = RoundedCornerShape(27.dp),
-            ) { Text(if (active) "Disconnect" else "Connect", style = MaterialTheme.typography.titleMedium) }
+            ) {
+                if (connecting) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = s.ink3)
+                    Spacer(Modifier.size(10.dp))
+                }
+                Text(if (connecting) "Cancel" else if (active) "Disconnect" else "Connect", style = MaterialTheme.typography.titleMedium)
+            }
         }
         if (status.killSwitchEnforced && !active) {
             Spacer(Modifier.height(8.dp))
@@ -203,6 +212,9 @@ private fun ExitCard(status: Status, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall, color = s.ink3,
                 )
                 status.exitWarning?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = s.straw) }
+                if (exit != null && exit.txBytes > 8192 && exit.rxBytes == 0L) {
+                    Text("Nothing is coming back from ${exit.name} yet. Check that it is online and that an access rule lets you use it as an exit node.", style = MaterialTheme.typography.bodySmall, color = s.straw)
+                }
             }
             if (status.canChooseExit && status.isRunning) Text("Change", style = MaterialTheme.typography.labelLarge, color = s.blued)
         }
@@ -214,47 +226,66 @@ private fun ExitSheet(status: Status, onDone: () -> Unit) {
     val s = LocalSteel.current
     val scope = rememberCoroutineScope()
     val exits = status.peers.filter { it.exitNode }
+    var busyId by remember { mutableStateOf<String?>(null) }
     val choose = { id: String ->
-        scope.launch {
-            runCatching { GorgetCore.setExitNode(id) }
-            onDone()
+        if (busyId == null) {
+            busyId = id
+            scope.launch {
+                runCatching { GorgetCore.setExitNode(id) }
+                    .onSuccess {
+                        Snack.show(if (id.isEmpty()) "Exit node off: only private traffic uses Gorget" else "Internet traffic now goes through ${exits.firstOrNull { it.id == id }?.name ?: "the exit node"}")
+                    }
+                    .onFailure { Snack.error(it.message ?: "Couldn't change the exit node") }
+                busyId = null
+                onDone()
+            }
         }
     }
     Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
         Text("Send internet traffic through", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(4.dp))
         Text("An exit node hides your location and protects you on untrusted Wi-Fi.", style = MaterialTheme.typography.bodySmall, color = s.ink3)
-        Spacer(Modifier.height(12.dp))
-        ExitOption("None: private traffic only", "Fastest; websites see your own connection", status.exitNodeId.isEmpty()) { choose("") }
+        Spacer(Modifier.height(8.dp))
+        TopProgress(busyId != null)
+        Spacer(Modifier.height(4.dp))
+        ExitOption("None: private traffic only", "Fastest; websites see your own connection", status.exitNodeId.isEmpty(), enabled = busyId == null, busy = busyId == "") { choose("") }
         exits.forEach { p ->
             ExitOption(p.name, buildString {
                 append(if (p.online) "Online" else "Offline")
                 if (p.direct && p.latencyMs > 0) append(" · ${p.latencyMs} ms")
                 if (p.gateway) append(" · server gateway")
-            }, status.exitNodeId == p.id, enabled = p.online) { choose(p.id) }
+            }, status.exitNodeId == p.id, enabled = p.online && busyId == null, busy = busyId == p.id) { choose(p.id) }
         }
         if (exits.isEmpty()) Text("No exit nodes are available to you.", style = MaterialTheme.typography.bodyMedium, color = s.ink3, modifier = Modifier.padding(vertical = 12.dp))
         if (status.exitNodeId.isNotEmpty() || exits.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             val prefs = status.prefs
             ToggleRow("Allow local network access", "Reach printers and devices on your Wi-Fi while using an exit node", prefs.allowLan) { v ->
-                scope.launch { runCatching { GorgetCore.setPrefs(prefs.copy(allowLan = v)) } }
+                scope.launch {
+                    runCatching { GorgetCore.setPrefs(prefs.copy(allowLan = v)) }
+                        .onSuccess { Snack.show(if (v) "Local network access on" else "Local network access off") }
+                        .onFailure { Snack.error(it.message ?: "Couldn't save the setting") }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ExitOption(title: String, subtitle: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ExitOption(title: String, subtitle: String, selected: Boolean, enabled: Boolean = true, busy: Boolean = false, onClick: () -> Unit) {
     val s = LocalSteel.current
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = enabled, role = Role.RadioButton, onClick = onClick).padding(vertical = 10.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = null, enabled = enabled)
+        if (busy) {
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+        } else {
+            RadioButton(selected = selected, onClick = null, enabled = enabled || selected)
+        }
         Spacer(Modifier.size(10.dp))
         Column {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = if (enabled) s.ink else s.ink3)
+            Text(title, style = MaterialTheme.typography.titleSmall, color = if (enabled || selected) s.ink else s.ink3)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = s.ink3)
         }
     }

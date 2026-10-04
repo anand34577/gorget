@@ -204,6 +204,7 @@ export interface Overview {
   version: string;
   gateway?: GatewayStatus;
   relay?: { enabled: boolean; connections?: number; bytes?: number };
+  checks?: { level: "warn" | "danger"; text: string; to: string }[];
   recent_activity?: AuditEntry[];
 }
 

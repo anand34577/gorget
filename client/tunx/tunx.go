@@ -173,7 +173,7 @@ func (w *Wrapper) Write(bufs [][]byte, offset int) (int, error) {
 	for _, b := range bufs {
 		pkt := b[offset:]
 		p, ok := parse(pkt)
-		if !ok || !(w.ct.IsReply(p) || f.allows(p)) {
+		if !ok || !(w.ct.IsReply(p) || w.ct.IsErrorFor(p, pkt) || f.allows(p)) {
 			w.Dropped.Add(1)
 			continue
 		}

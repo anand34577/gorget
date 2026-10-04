@@ -1,0 +1,3 @@
+- Fixed exit nodes and standard WireGuard devices that were unreachable
+- The app now shows its real version
+- Spinners, progress and messages while things load

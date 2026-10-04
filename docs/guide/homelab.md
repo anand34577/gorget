@@ -67,7 +67,7 @@ By hand, if you prefer:
 
 1. **WireGuard apps > New configuration**, name it `home-router`, choose
    **Private network only**.
-2. Show the configuration, switch the format to **OpenWrt router** and download the
+2. Show the configuration, switch the format to **Router script (uci)** and download the
    script. Run it on the router (`ssh root@192.168.1.1 'sh -s' < home-router-openwrt.sh`)
    after `opkg update && opkg install wireguard-tools luci-proto-wireguard`.
 3. **Routes & exit nodes > Add networks behind a router**: pick `home-router` and add

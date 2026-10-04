@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Cable, CheckCircle2, Circle, Clock, HeartPulse, KeyRound, Laptop, Monitor, Router, Server, ShieldAlert, Waypoints, Wand2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Cable, CheckCircle2, Circle, Clock, HeartPulse, KeyRound, Laptop, Monitor, Router, Server, ShieldAlert, Waypoints, Wand2, Wrench, X } from "lucide-react";
 import { get } from "@/lib/api";
 import type { Device, Overview as OverviewT, Stats } from "@/lib/types";
 import { TimeChart } from "@/components/charts";
@@ -146,7 +146,7 @@ function GettingStarted({ o }: { o: OverviewT }) {
     {
       done: (routes.data?.routes.length ?? 0) > 0,
       title: "Reach your home network from anywhere",
-      body: "Connect your router (OpenWrt or any WireGuard router) or a machine at home, so one app reaches everything.",
+      body: "Connect your router (any router that speaks WireGuard) or a machine at home, so one app reaches everything.",
       action: () => setWizard(true),
       label: "Connect a router",
     },
@@ -192,7 +192,7 @@ function GettingStarted({ o }: { o: OverviewT }) {
         <div className="h-full bg-verdigris transition-all" style={{ width: `${((steps.length - left) / steps.length) * 100}%` }} />
       </div>
       <ol className="divide-y divide-line">
-        {steps.map((st) => (
+        {steps.filter((st) => !st.done).map((st) => (
           <li key={st.title} className="flex items-start gap-3 px-5 py-3">
             {st.done ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-verdigris" aria-label="Done" /> : <Circle className="mt-0.5 size-4 shrink-0 text-ink-3" aria-label="To do" />}
             <div className="min-w-0 flex-1">
@@ -207,6 +207,22 @@ function GettingStarted({ o }: { o: OverviewT }) {
           </li>
         ))}
       </ol>
+      {left < steps.length && (
+        <details className="group border-t border-line">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-2.5 text-xs text-ink-3 hover:text-ink-2 [&::-webkit-details-marker]:hidden">
+            <CheckCircle2 className="size-3.5 text-verdigris" /> {steps.length - left} step{steps.length - left === 1 ? "" : "s"} done
+            <span className="ml-auto group-open:hidden">Show</span>
+            <span className="ml-auto hidden group-open:inline">Hide</span>
+          </summary>
+          <ul className="divide-y divide-line border-t border-line">
+            {steps.filter((st) => st.done).map((st) => (
+              <li key={st.title} className="flex items-center gap-3 px-5 py-2 text-[13px] text-ink-3">
+                <CheckCircle2 className="size-4 shrink-0 text-verdigris" aria-hidden /> {st.title}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </Panel>
   );
 }
@@ -257,52 +273,48 @@ function LamellarBand({ devices, loading }: { devices?: Device[]; loading: boole
     <Panel className="overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line px-5 py-2.5 text-xs text-ink-3">
         <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-sm bg-verdigris" /> {online} connected
+          <span className="size-2 rounded-full bg-verdigris" /> {online} connected
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-sm bg-line-strong" /> {list.length - online - pending} offline
+          <span className="size-2 rounded-full bg-line-strong" /> {list.length - online - pending} offline
         </span>
         {pending > 0 && (
           <span className="flex items-center gap-1.5">
-            <span className="size-2 rounded-sm bg-straw" /> {pending} awaiting approval
+            <span className="size-2 rounded-full bg-straw" /> {pending} awaiting approval
           </span>
         )}
       </div>
-      <div className="flex flex-wrap gap-y-3 px-5 py-5 pl-7" role="list" aria-label="Devices">
-        {list.map((d, i) => (
-          <Tip
-            key={d.id}
-            content={
-              <span>
-                <b>{d.name}</b> · {d.ipv4}
-                <br />
-                {d.state === "pending" ? "Awaiting approval" : d.online ? "Connected" : `Last seen ${relTime(d.last_seen_at)}`}
-              </span>
-            }
-          >
-            <button
-              role="listitem"
-              onClick={() => navigate(d.kind === "wireguard" ? "/wireguard" : `/devices/${d.id}`)}
-              aria-label={`${d.name}, ${d.online ? "connected" : "offline"}`}
-              style={{ zIndex: list.length - i }}
-              className={cn(
-                "group relative -ml-2.5 h-16 w-13 rounded-[10px_10px_24px_24px] border shadow-sm transition-transform duration-150 hover:-translate-y-1 focus-visible:-translate-y-1",
-                d.state === "pending"
-                  ? "border-straw/50 bg-gradient-to-b from-straw-soft to-straw/30"
-                  : d.online
-                    ? "border-verdigris/50 bg-gradient-to-b from-verdigris-soft to-verdigris/35"
-                    : "border-line-strong bg-gradient-to-b from-surface-2 to-sunken",
-              )}
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 p-4" aria-label="Devices">
+        {list.map((d) => (
+          <li key={d.id}>
+            <Tip
+              content={
+                <span>
+                  <b>{d.name}</b> · {d.ipv4}
+                  <br />
+                  {d.state === "pending" ? "Awaiting approval" : d.online ? "Connected" : `Last seen ${relTime(d.last_seen_at)}`}
+                </span>
+              }
             >
-              <span className="absolute inset-x-1.5 top-1.5 h-px bg-white/50 dark:bg-white/10" />
-              <span className="absolute left-1.5 top-2.5 size-1 rounded-full bg-ink-3/40" />
-              <span className="absolute right-1.5 top-2.5 size-1 rounded-full bg-ink-3/40" />
-              <span className="absolute inset-x-0 bottom-1.5 truncate px-1 text-center font-mono text-[9px] text-ink-2">{d.name.slice(0, 7)}</span>
-              {d.posture?.length > 0 && <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-surface bg-oxide" aria-label="Breaks device health rules" />}
-            </button>
-          </Tip>
+              <button
+                onClick={() => navigate(d.kind === "wireguard" ? "/wireguard" : `/devices/${d.id}`)}
+                aria-label={`${d.name}, ${d.state === "pending" ? "awaiting approval" : d.online ? "connected" : "offline"}`}
+                className={cn(
+                  "relative flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-line-strong hover:bg-surface-2",
+                  d.state === "pending" ? "border-straw/40 bg-straw-soft/50" : d.online ? "border-verdigris/30" : "border-line",
+                )}
+              >
+                <span className={cn("size-2.5 shrink-0 rounded-full", d.state === "pending" ? "bg-straw" : d.online ? "bg-verdigris" : "bg-line-strong")} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium">{d.name}</span>
+                  <span className="block truncate font-mono text-[11px] text-ink-3">{d.ipv4}</span>
+                </span>
+                {d.posture?.length > 0 && <span className="size-2 shrink-0 rounded-full bg-oxide" aria-label="Breaks device health rules" />}
+              </button>
+            </Tip>
+          </li>
         ))}
-      </div>
+      </ul>
     </Panel>
   );
 }
@@ -316,6 +328,7 @@ function Attention({ o }: { o: OverviewT }) {
   if (o.devices.expiring_soon) items.push({ icon: <KeyRound />, text: `${o.devices.expiring_soon} device key${o.devices.expiring_soon > 1 ? "s" : ""} expire within 7 days`, to: "/devices", tone: "warn" });
   if (o.policy_error) items.push({ icon: <AlertTriangle />, text: "The saved access rules are invalid, so all traffic is blocked", to: "/access", tone: "danger" });
   if (o.gateway?.enabled && !o.gateway.running) items.push({ icon: <Cable />, text: "The WireGuard gateway isn't running, so WireGuard apps can't connect", to: "/settings?tab=system", tone: "danger" });
+  for (const c of o.checks ?? []) items.push({ icon: <Wrench />, text: c.text, to: c.to, tone: c.level });
   if (!items.length)
     return (
       <div className="flex items-center gap-2 text-[13px] text-ink-3">

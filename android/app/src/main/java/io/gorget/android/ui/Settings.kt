@@ -86,10 +86,19 @@ fun SettingsScreen(status: Status, onBack: () -> Unit, onApps: () -> Unit, onLog
     var confirmLogout by remember { mutableStateOf(false) }
     var notifications by remember { mutableStateOf(GorgetCore.appPrefs.notifications) }
     var theme by remember { mutableStateOf(GorgetCore.appPrefs.theme) }
-    val set: (io.gorget.android.core.Prefs) -> Unit = { p -> scope.launch { runCatching { GorgetCore.setPrefs(p) } } }
+    var busy by remember { mutableStateOf(0) }
+    var signingOut by remember { mutableStateOf(false) }
+    val set: (io.gorget.android.core.Prefs) -> Unit = { p ->
+        busy++
+        scope.launch {
+            runCatching { GorgetCore.setPrefs(p) }.onFailure { Snack.error(it.message ?: "Couldn't save the setting") }
+            busy--
+        }
+    }
     val split = GorgetCore.appPrefs.splitMode
 
     ScreenScaffold("Settings", onBack) {
+        TopProgress(busy > 0)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
             SectionLabel("Connection")
             Panel(Modifier.fillMaxWidth()) {
@@ -181,16 +190,25 @@ fun SettingsScreen(status: Status, onBack: () -> Unit, onApps: () -> Unit, onLog
 
     if (confirmLogout) {
         AlertDialog(
-            onDismissRequest = { confirmLogout = false },
+            onDismissRequest = { if (!signingOut) confirmLogout = false },
             title = { Text("Sign out of this device?") },
             text = { Text("It disconnects and leaves ${status.networkName.ifBlank { "the network" }}. You'll need to sign in again to reconnect.") },
             confirmButton = {
-                TextButton(onClick = {
-                    confirmLogout = false
-                    scope.launch { runCatching { GorgetCore.logout() } }
-                }) { Text("Sign out", color = s.oxide) }
+                TextButton(enabled = !signingOut, onClick = {
+                    signingOut = true
+                    scope.launch {
+                        runCatching { GorgetCore.logout() }
+                            .onSuccess { Snack.show("Signed out") }
+                            .onFailure { Snack.error(it.message ?: "Couldn't sign out") }
+                        signingOut = false
+                        confirmLogout = false
+                    }
+                }) {
+                    if (signingOut) androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = s.oxide)
+                    else Text("Sign out", color = s.oxide)
+                }
             },
-            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(enabled = !signingOut, onClick = { confirmLogout = false }) { Text("Cancel") } },
         )
     }
 }
@@ -201,88 +219,6 @@ private fun KV(k: String, v: String) {
     Row(Modifier.fillMaxWidth()) {
         Text(k, style = MaterialTheme.typography.bodySmall, color = s.ink3, modifier = Modifier.weight(0.42f))
         Text(v, style = MaterialTheme.typography.bodyMedium, color = s.ink, modifier = Modifier.weight(0.58f))
-    }
-}
-
-private data class AppEntry(val pkg: String, val label: String, val icon: ImageBitmap?)
-
-@Composable
-fun AppsScreen(onBack: () -> Unit) {
-    val s = LocalSteel.current
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val prefs = GorgetCore.appPrefs
-    var mode by remember { mutableStateOf(prefs.splitMode) }
-    var selected by remember { mutableStateOf(prefs.splitApps) }
-    var apps by remember { mutableStateOf<List<AppEntry>?>(null) }
-    var query by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        apps = withContext(Dispatchers.IO) {
-            val pm = ctx.packageManager
-            pm.getInstalledApplications(PackageManager.GET_META_DATA)
-                .filter { it.packageName != ctx.packageName && (pm.getLaunchIntentForPackage(it.packageName) != null || it.flags and ApplicationInfo.FLAG_SYSTEM == 0) }
-                .map { AppEntry(it.packageName, pm.getApplicationLabel(it).toString(), runCatching { pm.getApplicationIcon(it).toBitmap(64, 64).asImageBitmap() }.getOrNull()) }
-                .sortedBy { it.label.lowercase() }
-        }
-    }
-
-    val save: () -> Unit = {
-        prefs.splitMode = mode
-        prefs.splitApps = selected
-        scope.launch { runCatching { GorgetCore.refreshTun() } }
-    }
-
-    ScreenScaffold("Apps", onBack = { save(); onBack() }) {
-        Column(Modifier.padding(horizontal = 20.dp)) {
-            val options = listOf(AppPrefs.SplitMode.ALL to "All apps", AppPrefs.SplitMode.ONLY_SELECTED to "Only selected", AppPrefs.SplitMode.EXCEPT_SELECTED to "All except")
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                options.forEachIndexed { i, (v, label) ->
-                    SegmentedButton(selected = mode == v, onClick = { mode = v }, shape = SegmentedButtonDefaults.itemShape(i, options.size)) { Text(label) }
-                }
-            }
-            Text(
-                when (mode) {
-                    AppPrefs.SplitMode.ALL -> "Every app uses Gorget."
-                    AppPrefs.SplitMode.ONLY_SELECTED -> "Only the apps you tick use Gorget; everything else uses your normal connection."
-                    AppPrefs.SplitMode.EXCEPT_SELECTED -> "Ticked apps bypass Gorget, for example banking apps that block VPNs."
-                },
-                style = MaterialTheme.typography.bodySmall, color = s.ink3, modifier = Modifier.padding(vertical = 10.dp),
-            )
-            if (mode != AppPrefs.SplitMode.ALL) {
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it }, singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    placeholder = { Text("Search apps") }, modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-        if (mode != AppPrefs.SplitMode.ALL) {
-            val list = apps
-            if (list == null) {
-                Text("Loading apps…", modifier = Modifier.padding(20.dp), color = s.ink3)
-            } else {
-                LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)) {
-                    items(list.filter { query.isBlank() || it.label.contains(query, true) || it.pkg.contains(query, true) }, key = { it.pkg }) { app ->
-                        val checked = app.pkg in selected
-                        Row(
-                            Modifier.fillMaxWidth().clickable(role = Role.Checkbox) {
-                                selected = if (checked) selected - app.pkg else selected + app.pkg
-                            }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            if (app.icon != null) Image(app.icon, contentDescription = null, modifier = Modifier.size(36.dp)) else Spacer(Modifier.size(36.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(app.label, style = MaterialTheme.typography.titleSmall, color = s.ink)
-                                Text(app.pkg, style = MaterialTheme.typography.bodySmall, color = s.ink3)
-                            }
-                            Checkbox(checked = checked, onCheckedChange = null)
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

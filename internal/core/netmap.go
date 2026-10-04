@@ -141,6 +141,9 @@ func (c *Core) peer(s *Snapshot, p *store.Device, extraAllowed []netip.Prefix) *
 	}
 	if p.Kind == store.KindGateway {
 		out.KeepaliveSeconds = 25
+		if eps := c.GatewayEndpoints(); len(eps) > 0 {
+			out.Endpoints = eps
+		}
 	}
 	return out
 }

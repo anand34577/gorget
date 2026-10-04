@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Globe, Laptop, Monitor, Waypoints } from "lucide-react";
+import { Explainer, Flow } from "@/components/flow";
 import { errMessage, get, put } from "@/lib/api";
 import type { Device, Settings, SettingsResponse } from "@/lib/types";
 import { useUnsavedGuard } from "@/lib/utils";
@@ -84,6 +86,17 @@ export function DnsPage() {
       />
       {err && <div className="mb-4"><ErrorNote>{err}</ErrorNote></div>}
       <div className="space-y-6 pb-20">
+        <Explainer id="dns" title="How a name is looked up">
+          <Flow
+            steps={[
+              { icon: <Laptop />, title: "A device asks", sub: "for a name" },
+              { icon: <Monitor />, title: "Device names and your records", sub: `*.${domain} and custom records` },
+              { icon: <Waypoints />, title: "Split domains", sub: "sent to their own servers" },
+              { icon: <Globe />, title: "Your resolvers", sub: "everything else, encrypted with DoH or DoT" },
+            ]}
+          />
+          <p className="mt-4 text-center text-xs text-ink-3">The first match answers. Names that only exist inside your network never leave it.</p>
+        </Explainer>
         <Panel>
           <PanelHeader title="Device names" />
           <div className="divide-y divide-line px-5">

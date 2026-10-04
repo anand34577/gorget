@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { errMessage, get, post } from "@/lib/api";
 import type { Device } from "@/lib/types";
 import { generateKeyPair, withPrivateKey } from "@/lib/wgkeys";
-import { toOpenWrt } from "@/lib/openwrt";
+import { toRouterScript } from "@/lib/routerScript";
 import { cn, download } from "@/lib/utils";
 import { Button, Checkbox, CopyButton, Dialog, ErrorNote, Field, Input, ListEditor, Mono, Note } from "@/components/ui";
 import { Flow, type FlowState } from "@/components/flow";
@@ -25,7 +25,7 @@ const stepNames = ["What", "Networks", "Connect"];
 
 /**
  * Guided setup for reaching a home or office network with the one Gorget app: a router that only
- * speaks WireGuard (OpenWrt and others), or a Linux computer that runs Gorget itself.
+ * speaks WireGuard (MikroTik, pfSense, GL.iNet and others), or a Linux computer that runs Gorget itself.
  */
 export function RouterWizard({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const navigate = useNavigate();
@@ -36,6 +36,7 @@ export function RouterWizard({ open, onOpenChange }: { open: boolean; onOpenChan
   const [nets, setNets] = useState<string[]>([]);
   const [manage, setManage] = useState(true);
   const [masq, setMasq] = useState(false);
+  const [how, setHow] = useState<"conf" | "script">("conf");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [created, setCreated] = useState<{ id: string; name: string; config: string } | null>(null);
@@ -49,6 +50,7 @@ export function RouterWizard({ open, onOpenChange }: { open: boolean; onOpenChan
       setNets([]);
       setManage(true);
       setMasq(false);
+      setHow("conf");
       setErr("");
       setCreated(null);
       setAdded([]);
@@ -60,8 +62,9 @@ export function RouterWizard({ open, onOpenChange }: { open: boolean; onOpenChan
   const device = created ? live.data?.find((d) => d.id === created.id) : undefined;
   const online = !!device?.online;
 
-  const script = useMemo(() => (created ? toOpenWrt(created.name, created.config, { manage, masquerade: masq }) : ""), [created, manage, masq]);
-  const file = created ? `${created.name}-openwrt.sh` : "";
+  const script = useMemo(() => (created ? toRouterScript(created.name, created.config, { manage, masquerade: masq }) : ""), [created, manage, masq]);
+  const confFile = created ? `${created.name}.conf` : "";
+  const file = created ? `${created.name}-router.sh` : "";
 
   const addNetworks = async (id: string, todo: string[]) => {
     const done: string[] = [];
@@ -174,7 +177,7 @@ export function RouterWizard({ open, onOpenChange }: { open: boolean; onOpenChan
           <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="What are you connecting?">
             {(
               [
-                ["router", <Router key="r" />, "A router with WireGuard", "OpenWrt, MikroTik, pfSense, a NAS… anything that runs the standard WireGuard but not the Gorget app. You keep just one VPN."],
+                ["router", <Router key="r" />, "A router with WireGuard", "MikroTik, pfSense, GL.iNet, a NAS… anything that runs standard WireGuard but not the Gorget app. You keep just one VPN."],
                 ["linux", <Laptop key="l" />, "A Linux computer at home", "A Raspberry Pi, a server or a Proxmox host that is always on. It runs the Gorget app and shares your network."],
               ] as const
             ).map(([k, icon, title, desc]) => (
@@ -206,11 +209,11 @@ export function RouterWizard({ open, onOpenChange }: { open: boolean; onOpenChan
 
       {step === 1 && kind === "router" && (
         <div className="space-y-4">
-          <Field label="Which home networks should be reachable?" hint="The LAN, and any VLANs, as address ranges. Check them in the router: Network > Interfaces (OpenWrt) shows each one, for example 192.168.1.1/24 is the network 192.168.1.0/24.">
+          <Field label="Which home networks should be reachable?" hint="The LAN, and any VLANs, as address ranges. Check them in the router: the interface list shows each one, for example 192.168.1.1/24 is the network 192.168.1.0/24.">
             <ListEditor values={nets} onChange={setNets} placeholder="192.168.1.0/24" suggestions={lanSuggestions} validate={cidrOk} disabled={!!created} />
           </Field>
           <div className="space-y-2 rounded-lg border border-line bg-surface-2 p-3">
-            <div className="text-[13px] font-medium">Options for the OpenWrt script</div>
+            <div className="text-[13px] font-medium">Options for the router script (only used if you choose the script)</div>
             <Checkbox checked={manage} onChange={setManage} label="Let Gorget devices open the router's SSH and web interface (LuCI)" />
             <Checkbox checked={masq} onChange={setMasq} label="Some home devices don't use this router as their gateway (a VLAN behind another router): translate addresses" />
             <p className="text-xs text-ink-3">The access rules in Gorget still decide who may reach what; you can change both options later.</p>
@@ -281,35 +284,79 @@ export function RouterWizard({ open, onOpenChange }: { open: boolean; onOpenChan
           {remaining.length > 0 && <Note tone="warn">These networks weren't added yet: {remaining.join(", ")}. Use “Retry adding networks”.</Note>}
 
           {!online && (
-            <ol className="space-y-3 text-[13px]">
-              <Step n={1} title="Install WireGuard on the router (once)" body={<Cmd value="opkg update && opkg install wireguard-tools luci-proto-wireguard" hint="OpenWrt 22.03 or newer. Newer releases use apk instead of opkg." />} />
-              <Step
-                n={2}
-                title="Run the setup script on the router"
-                body={
-                  <div className="space-y-2">
-                    <Cmd value={`ssh root@192.168.1.1 'sh -s' < ${file}`} hint="Use your router's address. Download the script first:" />
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" onClick={() => download(file, script)}>
-                        <Download /> Download {file}
+            <div className="space-y-3 text-[13px]">
+              <div className="inline-flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="How to configure the router">
+                {(
+                  [
+                    ["conf", "Config file (any router)"],
+                    ["script", "Shell script (uci routers)"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button key={id} type="button" role="radio" aria-checked={how === id} onClick={() => setHow(id)} className={cn("rounded px-2.5 py-1 text-xs font-medium", how === id ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {how === "conf" ? (
+                <ol className="space-y-3">
+                  <Step
+                    n={1}
+                    title="Download the WireGuard configuration"
+                    body={
+                      <Button size="sm" onClick={() => download(confFile, created.config)}>
+                        <Download /> Download {confFile}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => toast.info("Paste it into the router's SSH session, or LuCI > System > Startup > Local Startup, then run it.")}>
-                        Other ways to run it
-                      </Button>
-                    </div>
-                  </div>
-                }
-              />
-              <Step n={3} title="That's it" body={<span className="text-ink-2">The router connects, and this page turns green.</span>} />
-            </ol>
+                    }
+                  />
+                  <Step
+                    n={2}
+                    title="Import it on the router"
+                    body={
+                      <div className="space-y-1.5 text-ink-2">
+                        <p>Every router that supports WireGuard can import a standard configuration file. Look for “WireGuard” in its VPN settings:</p>
+                        <ul className="list-disc space-y-1 pl-5 text-xs">
+                          <li><b>MikroTik:</b> WinBox &gt; WireGuard &gt; add the interface and peer from the file, then an address and a firewall forward rule.</li>
+                          <li><b>pfSense / OPNsense:</b> VPN &gt; WireGuard &gt; add a tunnel and a peer from the file, assign the interface, allow forwarding to your LAN.</li>
+                          <li><b>GL.iNet, Asus, Synology, UniFi and similar:</b> VPN client &gt; WireGuard &gt; import the file.</li>
+                          <li><b>Any Linux box:</b> <Mono>sudo wg-quick up ./{confFile}</Mono> (and turn on IP forwarding).</li>
+                        </ul>
+                      </div>
+                    }
+                  />
+                  <Step n={3} title="That's it" body={<span className="text-ink-2">The router connects, and this page turns green. Make sure the router forwards traffic between the tunnel and your home networks.</span>} />
+                </ol>
+              ) : (
+                <ol className="space-y-3">
+                  <Step n={1} title="Make sure WireGuard is installed on the router" body={<span className="text-ink-2">Many routers include it. If not, install the <Mono>wireguard-tools</Mono> package with the router's package manager.</span>} />
+                  <Step
+                    n={2}
+                    title="Run the setup script on the router"
+                    body={
+                      <div className="space-y-2">
+                        <Cmd value={`ssh root@192.168.1.1 'sh -s' < ${file}`} hint="Use your router's address. Download the script first:" />
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" onClick={() => download(file, script)}>
+                            <Download /> Download {file}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => toast.info("Paste it into the router's SSH session, or into its startup scripts page, then run it.")}>
+                            Other ways to run it
+                          </Button>
+                        </div>
+                      </div>
+                    }
+                  />
+                  <Step n={3} title="That's it" body={<span className="text-ink-2">The router connects, and this page turns green.</span>} />
+                </ol>
+              )}
+            </div>
           )}
           <details className="rounded-lg border border-line">
-            <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium">Show the script</summary>
+            <summary className="cursor-pointer px-3 py-2 text-[13px] font-medium">{how === "conf" ? "Show the configuration" : "Show the script"}</summary>
             <div className="border-t border-line p-3">
               <div className="mb-1 flex justify-end">
-                <CopyButton value={script} />
+                <CopyButton value={how === "conf" ? created.config : script} />
               </div>
-              <pre className="max-h-64 overflow-auto rounded bg-sunken p-3 font-mono text-[11.5px] leading-relaxed">{script}</pre>
+              <pre className="max-h-64 overflow-auto rounded bg-sunken p-3 font-mono text-[11.5px] leading-relaxed">{how === "conf" ? created.config : script}</pre>
               <p className="mt-2 text-xs text-ink-3">It contains the router's private key. Don't share it; it is not stored on the server and can't be shown again.</p>
             </div>
           </details>

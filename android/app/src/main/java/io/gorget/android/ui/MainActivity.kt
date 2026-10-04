@@ -13,6 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
                 val status by GorgetCore.status.collectAsStateWithLifecycle()
                 Box(Modifier.fillMaxSize().background(LocalSteel.current.bg).navigationBarsPadding()) {
                     Root(status, onConnect = ::connect, onThemeChange = { themeState.value = it })
+                    SnackHost(Modifier.align(Alignment.BottomCenter))
                 }
             }
         }
@@ -101,6 +103,13 @@ private fun Root(status: Status, onConnect: () -> Unit, onThemeChange: (String) 
     LaunchedEffect(status.state) {
         if (prevState == Status.STATE_NEEDS_LOGIN || prevState == Status.STATE_EXPIRED) {
             if (status.state == Status.STATE_STOPPED && GorgetCore.isRegistered()) onConnect()
+        }
+        // Say what happened after the thing that took a moment.
+        when {
+            prevState == Status.STATE_CONNECTING && status.state == Status.STATE_RUNNING ->
+                Snack.show("Connected" + (status.exitNode?.let { " through ${it.name}" } ?: ""))
+            prevState == Status.STATE_RUNNING && status.state == Status.STATE_STOPPED -> Snack.show("Disconnected")
+            prevState == Status.STATE_CONNECTING && status.state == Status.STATE_PENDING -> Snack.show("Waiting for an administrator to approve this device")
         }
         prevState = status.state
     }
